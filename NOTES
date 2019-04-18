@@ -1,0 +1,90 @@
+Development and deployment strategy:
+
+1. Intro
+2. Python source files
+3. Building
+4. Release / Distribution
+
+1. Introduction
+---------------
+
+I probably want to have runnable Python code and/or little sh scripts available at all times
+for development and testing needs.
+I would only occasionally need the generated C code and the releaseable binaries (.dll/.so and .exe).
+
+Let's keep the runnable py/sh in "scripts" and the binaries in "bin". Consider adding the former
+to $PATH for greatest ease of use.
+
+2. Python files
+---------------
+
+File sizes should be kept much smaller than the Bash originals.
+
+Highest-level Python code -- runnable files containing __name__ == "__main__" -- should be named *.py.
+Store these in "scripts" as mentioned above and add that to the $PATH.
+
+Store the other files in "src" in a subtree that makes sense as the project develops.
+Let us use the .pyx extension since the internet says cython needs it.
+Let us use an __init.py__ in each subdirectory to establish that the subdirectory is a package;
+this has implications for scope.
+
+3. How to build
+----------------
+
+TL;DR: For the bone-dry steps, skip to BUILD STEPS.
+
+Adapted from two stackoverflow questions: 21826137 and 11698482
+
+I ran the following command:
+    python setup.py build_ext --inplace
+
+on my toy setup.py in "Projects/scratch":
+
+    from distutils.core import setup
+    from Cython.Build import cythonize
+
+    setup(name='Hello world app',
+        ext_modules=cythonize("secondary.pyx", language_level=3))
+
+which generated a log of build steps that I tweaked to come up with the following.
+
+
+BUILD STEPS:
+***********
+
+Write .pyx include-files to tell cython which .pyx code files should go into each dll/so.
+For example, here is "includeBoth.pyx":
+
+    include "primary.pyx"
+    include "secondary.pyx"
+
+Then make sure your imports refer to these include-files, not the individual code files:
+    from includeBoth import foo        # foo is a function inside primary.pyx
+
+Now build a single .C file from those .pyx files, then the .o, and then the .dll/.so.
+(The following steps are for Linux. To get the corresponding steps for Windows, go back to
+the setup.py shown above and run the same python command on it, generating a build log.
+Go through the log and manually rerun the individual steps, tweaking as needed.)
+1.    cython -3 combined.pyx
+2.    gcc -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c combined.c -o build/temp.linux-x86_64-3.4m/combined.o
+3.    gcc -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld build/temp.linux-x86_64-3.4m/combined.o -L/usr/lib64 -lpython3.4m -o /home/miniquery/projects/scratch/combined.so
+ 
+Create the main C source file and then the runnable .exe that will use the .so(s):
+    cython -3 --embed main.py      # main.py imports the .dll/.so's that it needs by their root names
+    gcc -I /usr/include/python3.4m -L /usr/lib64 -o main.exe main.c -lpython3.4m
+
+
+4. Release / Distribution
+-------------------------
+
+Put .exes in "bin" and .so/.dlls in "lib". That is how we would like to install them.
+Put (top-level) scripts in "scripts" and add it to the PATH for easier testing and running in the dev phase.
+
+When compiling, generate .so/.dll rather than static .a files.
+    Reason: Have a whole series of .exes corresponding to the main script and they (can) share
+    a whole lot of code. Static .a's would introduce massive code bloat.
+
+The distribution must (of course!) include all .exes and .dlls from bin/ but not the *.py from scripts/
+and should include cache/ and config/ subdirs, and the contents of the latter.
+
+the sample Table1.py, the 
