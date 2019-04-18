@@ -3,8 +3,8 @@
 import os
 import sys
 
-sys.path.append("src/")
-from minihelp import HelpType, shouldHelpOrExecute, doHelp
+sys.path.append("../src/")
+from minihelp import HelpType, shouldHelpOrExecute, giveHelp
 
 def main():
     try:
@@ -13,7 +13,8 @@ def main():
         MINI_HOME = os.environ['HOME'] + '/miniquery'
 
     argc = len(sys.argv);
-    helpCode = shouldHelpOrExecute(sys.argv[1], argc)
+    helpCode = shouldHelpOrExecute(sys.argv[1] if argc>1 else '', argc)
+
     if helpCode != HelpType.NO_HELP:
         giveHelp(sys.argv[0], argc)
         print("MMMM Put doExit here.")
