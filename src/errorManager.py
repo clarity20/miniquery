@@ -13,7 +13,7 @@ class ReturnCode(Enum):
     INVALID_DATE = 8
     UNBALANCED_PARENTHESES = 9
 
-errorMsg = {
+errorMsgDict = {
     0 : '',
     1 : 'USAGE: {0} {1} {2}\nType {0} -h or --help for detailed help.',
     2 : 'Illegal grammar / no feasible interpretation for "{0}".',
@@ -26,26 +26,26 @@ errorMsg = {
     9 : 'Error: Unbalanced parentheses in argument {0}.'
     }
 
-#MMMM: make this class data
-errMsg = ''
-returnCode = ReturnCode.SUCCESS
-errOutputStream = sys.stderr
+class ErrorManager:
 
-def setError(code, *args, msg=""):
-    if '$' in msg:
-        print('Bad call to setError: argument "msg" must be flat.')
-        return 99
-    else:
-        pass
+    # The data members can be class-scope because the class is a singleton anyway
+    errMsg = ''
+    returnCode = ReturnCode.SUCCESS
+    errOutputStream = sys.stderr
 
-    template = errorMsg[code.value]
-    errMsg = template.format(*args) if args else template
-    print('MMMM: errMsg: ' + errMsg)
+    def setError(self, code, *args, msg=""):
+        if '$' in msg:
+            print('Bad call to setError: argument "msg" must be flat.\n')
+            return 99
+        else:
+            pass
 
-    return 0
+        template = errorMsgDict[code.value]
+        self.errMsg = template.format(*args) if args else template
+        return ReturnCode.SUCCESS
 
-def doExit(msg=errMsg):
-    print ('MMMM message: ' + msg)
-    errOutputStream.write(msg)
-    sys.exit(returnCode.value)
+    def doExit(self, msg=None):
+        print(msg if msg else self.errMsg, file=self.errOutputStream)
+        sys.exit(self.returnCode.value)
 
+miniErrorManager = ErrorManager()

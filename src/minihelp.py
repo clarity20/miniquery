@@ -1,7 +1,7 @@
 import re
 from enum import Enum
 
-from error import setError, ReturnCode, doExit
+from errorManager import ReturnCode, miniErrorManager
 
 class HelpType(Enum):
     USAGE_HELP = 1
@@ -32,12 +32,14 @@ def giveHelp(programName_0, helpType = HelpType.FULL_HELP, objectName_0 = '',
         else:
             pass     # do nothing
 
-        setError(ReturnCode.HELP_AND_EXIT, programName, objectName, trailingArguments)
+        miniErrorManager.setError(ReturnCode.HELP_AND_EXIT, programName,
+                objectName, trailingArguments)
 
     # For detailed help, choose the right text from a text archive
     else:
         # Fetch the detailed help, and then...
-        setError(ReturnCode.HELP_AND_EXIT, msg='Details to come.')
+        miniErrorManager.setError(ReturnCode.HELP_AND_EXIT,
+                msg='Details to come.')
 
     return ReturnCode.SUCCESS
 
