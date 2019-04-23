@@ -40,8 +40,12 @@ class ErrorManager:
         else:
             pass
 
-        template = errorMsgDict[code.value]
-        self.errMsg = template.format(*args) if args else template
+        if msg != '':
+            self.errMsg = msg
+        else:
+            template = errorMsgDict[code.value]
+            self.errMsg = template.format(*args) if args else template
+
         return ReturnCode.SUCCESS
 
     def doExit(self, msg=None):
