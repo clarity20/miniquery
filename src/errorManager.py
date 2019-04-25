@@ -33,15 +33,15 @@ class ErrorManager:
     returnCode = ReturnCode.SUCCESS
     errOutputStream = sys.stderr
 
-    def setError(self, code, *args, msg=""):
+    def setError(self, code, *args, msgOverride=""):
         if '$' in msg:
-            print('Bad call to setError: argument "msg" must be flat.\n')
+            print('Bad call to setError: argument "msg" must be flat.')
             return 99
         else:
             pass
 
-        if msg != '':
-            self.errMsg = msg
+        if msgOverride != '':
+            self.errMsg = msgOverride
         else:
             template = errorMsgDict[code.value]
             self.errMsg = template.format(*args) if args else template
