@@ -1,0 +1,3 @@
+[submodule "data/third-party/mywind"]
+	path = data/third-party/mywind
+	url = https://github.com/dalers/mywind.git
