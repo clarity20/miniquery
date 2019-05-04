@@ -34,7 +34,7 @@ class ErrorManager:
     errOutputStream = sys.stderr
 
     def setError(self, code, *args, msgOverride=""):
-        if '$' in msg:
+        if '$' in msgOverride:
             print('Bad call to setError: argument "msg" must be flat.')
             return 99
         else:

@@ -39,7 +39,7 @@ def giveHelp(programName_0, helpType = HelpType.FULL_HELP, objectName_0 = '',
     else:
         # Fetch the detailed help, and then...
         miniErrorManager.setError(ReturnCode.HELP_AND_EXIT,
-                msg='Details to come.')
+                msgOverride='Details to come.')
 
     return ReturnCode.SUCCESS
 

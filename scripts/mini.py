@@ -3,25 +3,11 @@
 import os
 import sys
 
-# Defaultable environment
-try:
-    HOME = os.environ['HOME']
-    MINI_HOME = os.environ['MINI_HOME']
-    MINI_CACHE = os.environ['MINI_CACHE']
-    MINI_CONFIGS = os.environ['MINI_CONFIGS']
-except KeyError:
-    MINI_HOME = HOME + '/miniquery'
-    MINI_CACHE = HOME + '/miniquery/cache'
-    MINI_CONFIGS = HOME + '/miniquery/config'
-# Required environment
-try:
-    MINI_DBNAME = os.environ['MINI_DBNAME']
-except KeyError:
-    sys.exit(1)
-
-sys.path.append(MINI_HOME + "/src/")
+#sys.path.append(MINI_HOME + "/src/")
+sys.path.append("/data/data/com.termux/files/home/projects/miniquery/src/")
+import miniEnv as env
 from minihelp import HelpType, shouldHelpOrExecute, giveHelp
-from errorManager import miniErrorManager
+from errorManager import miniErrorManager, ReturnCode
 from configManager import miniConfigManager
 
 def main():
@@ -32,7 +18,10 @@ def main():
         giveHelp(sys.argv[0], helpCode, 'table')
         miniErrorManager.doExit()
 
-    if miniConfigManager.configureToSchema() != ReturnCode.SUCCESS
+    if env.setEnv() != ReturnCode.SUCCESS:
+        miniErrorManager.doExit('Environment settings incomplete or incorrect.')
+
+    if miniConfigManager.configureToSchema(sys.argv[1]) != ReturnCode.SUCCESS:
         miniErrorManager.doExit()
 
 # Main entry point.
