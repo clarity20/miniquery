@@ -7,6 +7,7 @@ import pysnooper
 
 import miniEnv as env
 from errorManager import miniErrorManager as em, ReturnCode
+from expanderEngine import miniExpanderEngine as exp
 #from spellingExpander import spellExpander
 
 class RegexType(Enum):
@@ -24,7 +25,6 @@ class ConfigManager:
     masterTableNameList = []     # list of names
     masterColumnNameList = []    # list of tuples
 
-    @pysnooper.snoop()
     def loadTableNameList(self, tableListFile):
         try:
             tablesFp = open(tableListFile, 'r')
@@ -56,7 +56,7 @@ class ConfigManager:
                                                     env.MINI_CACHE,
                                                     env.MINI_DBNAME,
                                                     'information_schema.tables'))
-#        expander = miniExpanderEngine.tableExpander   #MMMM Need an accessor fcn???
+#        expander = exp.tableExpander   #MMMM Need an accessor fcn???
 #        tableList = expander.getExpandedNames(tableName)
 #        tableName = expander.promptForExpansion(tableName, tableList)
 #
