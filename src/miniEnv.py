@@ -9,11 +9,16 @@ MINI_HOME = ''
 MINI_CACHE = ''
 MINI_CONFIG = ''
 MINI_DBNAME = ''
+MINI_USER = ''
+MINI_HOST = ''
+MINI_PASSWORD = ''
 
 # Read the environment
 def setEnv():
-    # Tend to the defaultable environment settings
     global HOME, MINI_HOME, MINI_CACHE, MINI_CONFIG
+    global MINI_DBNAME, MINI_USER, MINI_HOST, MINI_PASSWORD
+
+    # Load the optional environment settings
     HOME = os.environ['HOME']
     try:
         MINI_HOME = os.environ['MINI_HOME']
@@ -27,11 +32,17 @@ def setEnv():
         MINI_CONFIG = os.environ['MINI_CONFIG']
     except KeyError:
         MINI_CONFIG = MINI_HOME + '/config'
-
-    # Tend to the required environment settings
     try:
-        global MINI_DBNAME
+        # For security, allow password to be blank
+        MINI_PASSWORD = '=' + os.environ['MINI_PASSWORD']
+    except KeyError:
+        MINI_PASSWORD = ''
+
+    # Load the required environment settings
+    try:
         MINI_DBNAME = os.environ['MINI_DBNAME']
+        MINI_USER = os.environ['MINI_USER']
+        MINI_HOST = os.environ['MINI_HOST']
     except KeyError:
         miniErrorManager.setError(ReturnCode.MISSING_ARGUMENT)
         return ReturnCode.MISSING_ARGUMENT

@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import subprocess
+from getpass import getpass
 from enum import Enum
 import pysnooper
 
@@ -27,24 +28,48 @@ class ConfigManager:
 
     def loadTableNameList(self, tableListFile):
         try:
+            # Create a list of table names
             tablesFp = open(tableListFile, 'r')
             self.masterTableNameList = tablesFp.read().splitlines()
             tablesFp.close()
+
         except FileNotFoundError:
             #TODO Eventually we should use the pythonic db connection interfaces 
             #TODO but for now we spawn the DB commandline utility as a subprocess.
             #TODO How we do this will of course depend on the DBMS type.
             #TODO We need to invoke it so as to produce a headless tab-delimited result set.
-            program = 'mysql'
-            args = '-B -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema=\'' \
-            + env.MINI_DBNAME + '\'"'
-            proc = subprocess.run([program, args], stdout=subprocess.PIPE).stdout.decode('utf-8')
-            self.masterTableNameList = proc.splitlines()
+            #TODO The main result-set code should INCLUDE the header row for display to the end user.
+            if env.MINI_PASSWORD == '':
+                env.MINI_PASSWORD = getpass('Enter password: ')
+            cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
+            + ' -B -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema=\'' \
+            + env.MINI_DBNAME + '\'" --password=' + env.MINI_PASSWORD
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            self.masterTableNameList = stdout.decode('utf-8').splitlines()
 
         return ReturnCode.SUCCESS
 
 
     def loadColumnNameList(self, tableDescFile):
+        try:
+            # Create a list of size-3 tuples
+            with open(tableDescFile, 'r') as columnsFp:
+                self.masterColumnNameList = [tuple(l.rstrip().split('\t')) for l in columnsFp]
+
+        except FileNotFoundError:
+            if env.MINI_PASSWORD == '':
+                env.MINI_PASSWORD = getpass('Enter password: ')
+            cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
+            + ' -B -N -e "SELECT column_name, column_type, column_default ' \
+            + 'FROM information_schema.columns WHERE table_schema=\'' \
+            + env.MINI_DBNAME + '\'" --password=' + env.MINI_PASSWORD
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            self.masterColumnNameList = stdout.decode('utf-8').splitlines()
+
+        self.masterColumnNameList.sort()
+
         return ReturnCode.SUCCESS
 
 
@@ -56,16 +81,16 @@ class ConfigManager:
                                                     env.MINI_CACHE,
                                                     env.MINI_DBNAME,
                                                     'information_schema.tables'))
-#        expander = exp.tableExpander   #MMMM Need an accessor fcn???
+#        expander = exp.tableExpander
 #        tableList = expander.getExpandedNames(tableName)
 #        tableName = expander.promptForExpansion(tableName, tableList)
 #
-#        #MMMM: in old code, this fcn can throw an error - notice the "|| return $?"
-#        masterColumnNameList = self.loadColumnNameList("{}/{}/{}.columns".format(
-#                                                        env.MINI_CACHE,
-#                                                        env.MINI_DBNAME,
-#                                                        tableName))
-#
+        #MMMM: in old code, this fcn can throw an error - notice the "|| return $?"
+        self.masterColumnNameList = self.loadColumnNameList("{}/{}/{}.columns".format(
+                                                        env.MINI_CACHE,
+                                                        env.MINI_DBNAME,
+                                                        tableName))
+
         configFile = "{}/{}.cfg".format(env.MINI_CONFIG, env.MINI_DBNAME)
         #MMMM as above, handle possible error:
         tableName = 'table1'
