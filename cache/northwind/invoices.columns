@@ -1,7 +1,7 @@
-id	int(11)	NULL
-order_id	int(11)	NULL
-invoice_date	datetime	current_timestamp()
-due_date	datetime	NULL
-tax	decimal(19,4)	0.0000
-shipping	decimal(19,4)	0.0000
 amount_due	decimal(19,4)	0.0000
+due_date	datetime	NULL
+id	int(11)	NULL
+invoice_date	datetime	current_timestamp()
+order_id	int(11)	NULL
+shipping	decimal(19,4)	0.0000
+tax	decimal(19,4)	0.0000

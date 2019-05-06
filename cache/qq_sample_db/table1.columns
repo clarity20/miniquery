@@ -1,7 +1,7 @@
-id	int(11)	NULL
-name	varchar(20)	NULL
-zipcode	char(6)	NULL
-rating	decimal(8,4)	NULL
-rateCode	char(2)	NULL
 activationDate	date	NULL
 activationTime	time	NULL
+id	int(11)	NULL
+name	varchar(20)	NULL
+rateCode	char(2)	NULL
+rating	decimal(8,4)	NULL
+zipcode	char(6)	NULL

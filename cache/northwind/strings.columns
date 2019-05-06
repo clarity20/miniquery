@@ -1,2 +1,2 @@
-string_id	int(11)	NULL
 string_data	varchar(255)	NULL
+string_id	int(11)	NULL

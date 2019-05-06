@@ -38,6 +38,6 @@ Steps to prepare the cache for a database:
     mysql -B -N -u _user_ -h _host_ -e "SELECT table_name, column_name,
         referenced_table_name, referenced_column_name FROM key_column_usage
         WHERE referenced_table_name IS NOT NULL AND table_schema='_dbName_'
-        ORDER BY table_name" --password=_password_  > \
+        ORDER BY table_name, column_name" --password=_password_  > \
         _dbName_/information_schema.key_column_usage
 ```

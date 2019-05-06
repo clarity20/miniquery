@@ -1,8 +1,8 @@
+date_received	datetime	NULL
 id	int(11)	NULL
-purchase_order_id	int(11)	NULL
+inventory_id	int(11)	NULL
+posted_to_inventory	tinyint(1)	0
 product_id	int(11)	NULL
+purchase_order_id	int(11)	NULL
 quantity	decimal(18,4)	NULL
 unit_cost	decimal(19,4)	NULL
-date_received	datetime	NULL
-posted_to_inventory	tinyint(1)	0
-inventory_id	int(11)	NULL

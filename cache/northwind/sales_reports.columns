@@ -1,5 +1,5 @@
-group_by	varchar(50)	NULL
-display	varchar(50)	NULL
-title	varchar(50)	NULL
-filter_row_source	longtext	NULL
 default	tinyint(1)	0
+display	varchar(50)	NULL
+filter_row_source	longtext	NULL
+group_by	varchar(50)	NULL
+title	varchar(50)	NULL
