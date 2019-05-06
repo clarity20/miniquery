@@ -1,0 +1,10 @@
+id	int(11)	NULL
+order_id	int(11)	NULL
+product_id	int(11)	NULL
+quantity	decimal(18,4)	0.0000
+unit_price	decimal(19,4)	0.0000
+discount	double	0
+status_id	int(11)	NULL
+date_allocated	datetime	NULL
+purchase_order_id	int(11)	NULL
+inventory_id	int(11)	NULL

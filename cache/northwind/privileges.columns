@@ -1,0 +1,2 @@
+id	int(11)	NULL
+privilege_name	varchar(50)	NULL

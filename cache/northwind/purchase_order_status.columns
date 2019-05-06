@@ -1,0 +1,2 @@
+id	int(11)	NULL
+status	varchar(50)	NULL

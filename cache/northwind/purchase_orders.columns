@@ -1,0 +1,16 @@
+id	int(11)	NULL
+supplier_id	int(11)	NULL
+created_by	int(11)	NULL
+submitted_date	datetime	NULL
+creation_date	datetime	current_timestamp()
+status_id	int(11)	0
+expected_date	datetime	NULL
+shipping_fee	decimal(19,4)	0.0000
+taxes	decimal(19,4)	0.0000
+payment_date	datetime	NULL
+payment_amount	decimal(19,4)	0.0000
+payment_method	varchar(50)	NULL
+notes	longtext	NULL
+approved_by	int(11)	NULL
+approved_date	datetime	NULL
+submitted_by	int(11)	NULL

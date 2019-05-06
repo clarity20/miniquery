@@ -1,0 +1,9 @@
+id	int(11)	NULL
+transaction_type	tinyint(4)	NULL
+transaction_created_date	datetime	current_timestamp()
+transaction_modified_date	datetime	current_timestamp()
+product_id	int(11)	NULL
+quantity	int(11)	NULL
+purchase_order_id	int(11)	NULL
+customer_order_id	int(11)	NULL
+comments	varchar(255)	NULL

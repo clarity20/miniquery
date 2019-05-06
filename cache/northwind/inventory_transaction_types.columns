@@ -1,0 +1,2 @@
+id	tinyint(4)	NULL
+type_name	varchar(50)	NULL

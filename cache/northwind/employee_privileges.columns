@@ -1,0 +1,2 @@
+employee_id	int(11)	NULL
+privilege_id	int(11)	NULL
