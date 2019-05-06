@@ -68,8 +68,6 @@ class ConfigManager:
             stdout, stderr = proc.communicate()
             self.masterColumnNameList = stdout.decode('utf-8').splitlines()
 
-        self.masterColumnNameList.sort()
-
         return ReturnCode.SUCCESS
 
 

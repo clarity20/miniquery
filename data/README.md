@@ -1,22 +1,22 @@
 Sample data:
 -----------
 
-qq\_sample\_db: homemade data for pre-alpha testing-as-you-go
-third-party/mywind: a port of Microsoft's Northwind db from SQL Server to MySQL
+`qq\_sample\_db`: homemade data for pre-alpha testing-as-you-go
+`third-party/mywind`: a port of Microsoft's Northwind db from SQL Server to MySQL
 
 Steps to prepare the cache for a database:
 -----------------------------------------
 
-1. Create these dbs manually
-    `mysql -u _user_ -h _host_ -e "CREATE DATABASE foo" --password`
+1. Create the db manually
+    `mysql -u _user_ -h _host_ -e "CREATE DATABASE _dbName_" --password`
 
-2. Populate using the \*.sql files found in here
-    `mysql -u _user_ -h _host_ -D foo < foo.sql --password`
+2. Populate using the \*.sql files provided
+    `mysql -u _user_ -h _host_ -D _dbName_ < _dbName_.sql --password`
 
 3. Run queries to generate schema information for the db and each of its tables
-   and save the results to the Miniquery cache. The data in these files needs
-   to be tab-delimited with results only, no column header; set your
-   command-line flags accordingly.
+   and save the results to the MINIQUERY cache. The data in these files needs
+   to be tab-delimited with results only, no column header, and sorted by the
+   first column; set your command-line flags and queries accordingly.
 
 ``` 
     mysql -u _user_ -h _host_ -B -N -e "SELECT table_name 
@@ -32,7 +32,7 @@ Steps to prepare the cache for a database:
     done
 ```
 
-4. Run a query to summarize the table relations.
+4. Run a query to summarize the table relations. Similar formatting rules apply.
 
 ```
     mysql -B -N -u _user_ -h _host_ -e "SELECT table_name, column_name,
