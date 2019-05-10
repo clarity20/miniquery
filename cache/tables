@@ -1,0 +1,21 @@
+TABLE_CATALOG	varchar(512)	
+TABLE_SCHEMA	varchar(64)	
+TABLE_NAME	varchar(64)	
+TABLE_TYPE	varchar(64)	
+ENGINE	varchar(64)	NULL
+VERSION	bigint(21) unsigned	NULL
+ROW_FORMAT	varchar(10)	NULL
+TABLE_ROWS	bigint(21) unsigned	NULL
+AVG_ROW_LENGTH	bigint(21) unsigned	NULL
+DATA_LENGTH	bigint(21) unsigned	NULL
+MAX_DATA_LENGTH	bigint(21) unsigned	NULL
+INDEX_LENGTH	bigint(21) unsigned	NULL
+DATA_FREE	bigint(21) unsigned	NULL
+AUTO_INCREMENT	bigint(21) unsigned	NULL
+CREATE_TIME	datetime	NULL
+UPDATE_TIME	datetime	NULL
+CHECK_TIME	datetime	NULL
+TABLE_COLLATION	varchar(32)	NULL
+CHECKSUM	bigint(21) unsigned	NULL
+CREATE_OPTIONS	varchar(255)	NULL
+TABLE_COMMENT	varchar(2048)	

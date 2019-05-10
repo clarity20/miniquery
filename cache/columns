@@ -1,0 +1,20 @@
+TABLE_CATALOG	varchar(512)	
+TABLE_SCHEMA	varchar(64)	
+TABLE_NAME	varchar(64)	
+COLUMN_NAME	varchar(64)	
+ORDINAL_POSITION	bigint(21) unsigned	0
+COLUMN_DEFAULT	longtext	NULL
+IS_NULLABLE	varchar(3)	
+DATA_TYPE	varchar(64)	
+CHARACTER_MAXIMUM_LENGTH	bigint(21) unsigned	NULL
+CHARACTER_OCTET_LENGTH	bigint(21) unsigned	NULL
+NUMERIC_PRECISION	bigint(21) unsigned	NULL
+NUMERIC_SCALE	bigint(21) unsigned	NULL
+DATETIME_PRECISION	bigint(21) unsigned	NULL
+CHARACTER_SET_NAME	varchar(32)	NULL
+COLLATION_NAME	varchar(32)	NULL
+COLUMN_TYPE	longtext	NULL
+COLUMN_KEY	varchar(3)	
+EXTRA	varchar(30)	
+PRIVILEGES	varchar(80)	
+COLUMN_COMMENT	varchar(1024)	
