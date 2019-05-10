@@ -34,38 +34,55 @@ class ConfigManager:
             tablesFp.close()
 
         except FileNotFoundError:
-            #TODO Eventually we should use the pythonic db connection interfaces 
-            #TODO but for now we spawn the DB commandline utility as a subprocess.
-            #TODO How we do this will of course depend on the DBMS type.
-            #TODO We need to invoke it so as to produce a headless tab-delimited result set.
+            #TODO We need to run the query below against the RDBMS engine, whatever it is.
+            #TODO in such a way as to produce a headless tab-delimited result set.
             #TODO The main result-set code should INCLUDE the header row for display to the end user.
             if env.MINI_PASSWORD == '':
                 env.MINI_PASSWORD = getpass('Enter password: ')
             cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
             + ' -B -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema=\'' \
             + env.MINI_DBNAME + '\'" --password=' + env.MINI_PASSWORD
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
             stdout, stderr = proc.communicate()
+            if proc.returncode != 0:
+                return em.setError(proc.returnCode, 'Error ' \
+                        + proc.returncode.str() + ' in query execution engine.')
+
             self.masterTableNameList = stdout.decode('utf-8').splitlines()
 
         return ReturnCode.SUCCESS
 
 
-    def loadColumnNameList(self, tableDescFile):
+    def loadColumnNameList(self, tableDescFile, metadataType = ''):
         try:
             # Create a list of size-3 tuples
+            print('tableDescFile is ' + tableDescFile)
             with open(tableDescFile, 'r') as columnsFp:
                 self.masterColumnNameList = [tuple(l.rstrip().split('\t')) for l in columnsFp]
 
         except FileNotFoundError:
+            if metadataType:
+                tableSchema = "information_schema"
+                tableName = metadataType
+            else:
+                tableSchema = env.MINI_DBNAME
+                tableName = re.search(r'(.*)\.columns$', tableDescFile).group(1)
+
             if env.MINI_PASSWORD == '':
                 env.MINI_PASSWORD = getpass('Enter password: ')
             cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
             + ' -B -N -e "SELECT column_name, column_type, column_default ' \
             + 'FROM information_schema.columns WHERE table_schema=\'' \
-            + env.MINI_DBNAME + '\'" --password=' + env.MINI_PASSWORD
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            + tableSchema + '\' AND table_name=\'' + tableName + '\' \
+            " --password=' + env.MINI_PASSWORD
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
             stdout, stderr = proc.communicate()
+            if proc.returncode != 0:
+                return em.setError(proc.returnCode, 'Error ' \
+                        + proc.returncode.str() + ' in query execution engine.')
+
             self.masterColumnNameList = stdout.decode('utf-8').splitlines()
 
         return ReturnCode.SUCCESS
@@ -76,29 +93,48 @@ class ConfigManager:
         a, b, tableName = tableName_0.rpartition('/')
 
         self.masterTableNameList = self.loadTableNameList("{}/{}/{}".format(
-                                                    env.MINI_CACHE,
-                                                    env.MINI_DBNAME,
-                                                    'information_schema.tables'))
+                                                env.MINI_CACHE,
+                                                env.MINI_DBNAME,
+                                                'information_schema.tables'))
+        if not self.masterTableNameList:
+            return em.returnCode
+
+        #MMMM: Activate this when the time comes:
 #        expander = exp.tableExpander
 #        tableList = expander.getExpandedNames(tableName)
+        tableName = 'table1'
 #        tableName = expander.promptForExpansion(tableName, tableList)
 #
-        #MMMM: in old code, this fcn can throw an error - notice the "|| return $?"
         self.masterColumnNameList = self.loadColumnNameList("{}/{}/{}.columns".format(
                                                         env.MINI_CACHE,
                                                         env.MINI_DBNAME,
                                                         tableName))
+        if not self.masterColumnNameList:
+            return em.returnCode
 
         configFile = "{}/{}.cfg".format(env.MINI_CONFIG, env.MINI_DBNAME)
-        #MMMM as above, handle possible error:
-        tableName = 'table1'
-        self.loadConfigForTable(configFile, tableName)
+        if not self.loadConfigForTable(configFile, tableName):
+            return em.returnCode
 
         return ReturnCode.SUCCESS
 
 
     # Configuration for metadata proograms like findTable
-    def configureToMetadata(self, scriptName, metadataType):
+    def configureToMetadata(self, scriptName_0, metadataType):
+        a, b, scriptName = scriptName_0.rpartition('/')
+
+        self.masterColumnNameList = self.loadColumnNameList("{}/{}".format(
+                                                        env.MINI_CACHE,
+                                                        metadataType),
+                                                        metadataType)
+        if not self.masterColumnNameList:
+            return em.returnCode
+
+        # Load the script-specific configuration
+        configFile = "{}/metadataScripts.cfg".format(env.MINI_CONFIG)
+        if not self.loadConfigForTable(configFile, scriptName):
+            return em.returnCode
+
         return ReturnCode.SUCCESS
 
 
@@ -117,7 +153,7 @@ class ConfigManager:
                     if line.lstrip().startswith(sectionHeader):
                         isInsideSection = True
                 else:
-                    line = line.lstrip()
+                    line = line.strip()
                     if re.match(nextSectionRE, line):
                         break
                     elif line.startswith('#'):
@@ -189,8 +225,7 @@ class ConfigManager:
                             else:
                                 # Any other specifier signals that we are no longer in regex mode.
                                 # Handle the specifier generically.
-                                self.config[attribute] = value
-                                regexMode = False
+                                regexMode = self._acceptGenericConfig(attribute, value)
 
                         elif regexType == RegexType.NORMAL:
                             # Required specifier: column; no other specifiers are allowed
@@ -209,7 +244,7 @@ class ConfigManager:
 #                                    #TODO sqlTypeToInternalType (columnType)
 #                                    sCount = str(regexCount)
 #                                    self.config[columnType + sCount] = columnType
-#                                    regexCount += 1
+                                regexCount += 1
 #                                    regexMode = False
 #                                else:
 #                                    regexMode = False
@@ -233,17 +268,27 @@ class ConfigManager:
                                 self.config['upperBounds' + sCount] = match.group(2)
                                 regexCount += 1
                                 regexMode = False
-                            else:
-                                self.config[attribute] = value
-                                regexMode = False
 
+                    # Not in regex mode.
+                    else:
+                        regexMode = self._acceptGenericConfig(attribute, value)
 
-        self.config[regexCount] = regexCount
+        self.config['regexCount'] = regexCount
 
         if 'mainTable' not in self.config.keys():
             self.config['mainTable'] = tableName
 
         return ReturnCode.SUCCESS
+
+    def _acceptGenericConfig(self, key, value):
+        # Substitute values for shell variables, if any
+        if '$' in value:
+            g = re.match('\$[A-Za-z_]+', value)
+            variable = g.group(0)
+            value.replace(variable, os.environ[variable[1:]])
+
+        self.config[key] = value
+        return False     # the new value of regexMode
 
 
 miniConfigManager = ConfigManager()

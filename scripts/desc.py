@@ -3,7 +3,6 @@
 import os
 import sys
 
-#sys.path.append(MINI_HOME + "/src/")
 sys.path.append("/data/data/com.termux/files/home/projects/miniquery/src/")
 import miniEnv as env
 from minihelp import HelpType, shouldHelpOrExecute, giveHelp
@@ -15,13 +14,13 @@ def main():
     helpCode = shouldHelpOrExecute(sys.argv[1] if argc>=1 else '', argc)
 
     if helpCode != HelpType.NO_HELP:
-        giveHelp(sys.argv[0], helpCode, 'table')
+        giveHelp(sys.argv[0], helpCode, 'both')
         em.doExit()
 
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
-    if miniConfigManager.configureToSchema(sys.argv[1]) != ReturnCode.SUCCESS:
+    if miniConfigManager.configureToMetadata(sys.argv[0], 'columns') != ReturnCode.SUCCESS:
         em.doExit()
 
 # Main entry point.
