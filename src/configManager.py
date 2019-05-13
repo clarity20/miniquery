@@ -4,9 +4,10 @@ import re
 import subprocess
 from getpass import getpass
 from enum import Enum
-import pysnooper
+#import pysnooper
 
 import miniEnv as env
+from miniUtils import sqlTypeToInternalType
 from errorManager import miniErrorManager as em, ReturnCode
 from expanderEngine import miniExpanderEngine as exp
 #from spellingExpander import spellExpander
@@ -57,7 +58,6 @@ class ConfigManager:
     def loadColumnNameList(self, tableDescFile, metadataType = ''):
         try:
             # Create a list of size-3 tuples
-            print('tableDescFile is ' + tableDescFile)
             with open(tableDescFile, 'r') as columnsFp:
                 self.masterColumnNameList = [tuple(l.rstrip().split('\t')) for l in columnsFp]
 
@@ -92,11 +92,10 @@ class ConfigManager:
     def configureToSchema(self, tableName_0):
         a, b, tableName = tableName_0.rpartition('/')
 
-        self.masterTableNameList = self.loadTableNameList("{}/{}/{}".format(
+        if not self.loadTableNameList("{}/{}/{}".format(
                                                 env.MINI_CACHE,
                                                 env.MINI_DBNAME,
-                                                'information_schema.tables'))
-        if not self.masterTableNameList:
+                                                'information_schema.tables')):
             return em.returnCode
 
         #MMMM: Activate this when the time comes:
@@ -105,11 +104,10 @@ class ConfigManager:
         tableName = 'table1'
 #        tableName = expander.promptForExpansion(tableName, tableList)
 #
-        self.masterColumnNameList = self.loadColumnNameList("{}/{}/{}.columns".format(
+        if not self.loadColumnNameList("{}/{}/{}.columns".format(
                                                         env.MINI_CACHE,
                                                         env.MINI_DBNAME,
-                                                        tableName))
-        if not self.masterColumnNameList:
+                                                        tableName)):
             return em.returnCode
 
         configFile = "{}/{}.cfg".format(env.MINI_CONFIG, env.MINI_DBNAME)
@@ -123,11 +121,10 @@ class ConfigManager:
     def configureToMetadata(self, scriptName_0, metadataType):
         a, b, scriptName = scriptName_0.rpartition('/')
 
-        self.masterColumnNameList = self.loadColumnNameList("{}/{}".format(
+        if not self.loadColumnNameList("{}/{}".format(
                                                         env.MINI_CACHE,
                                                         metadataType),
-                                                        metadataType)
-        if not self.masterColumnNameList:
+                                                        metadataType):
             return em.returnCode
 
         # Load the script-specific configuration
@@ -191,7 +188,7 @@ class ConfigManager:
                         # any further attributes for this regex. If there are,
                         # they will compensate for this pre-incrementation.
                         regexCount += 1
-                        
+ 
                     elif attribute == 'regex':
                         regexMode = True
                         regex = value
@@ -236,19 +233,17 @@ class ConfigManager:
                                 # Look up the column type in the global column
                                 # list and store it. In the column list, accept
                                 # a populated or an unpopulated table name column
-                                print('MMMM build and search masterColumnList the new way')
-                                # This does not work because masterCNL is a list of tuples, not a string:
-#                                match = re.search('\n [^ ]*\ +' + value + '[\ ]+([a-z]+)', self.masterColumnNameList)
-#                                if match:
-#                                    columnType = match.group(1)
-#                                    #TODO sqlTypeToInternalType (columnType)
-#                                    sCount = str(regexCount)
-#                                    self.config[columnType + sCount] = columnType
-                                regexCount += 1
-#                                    regexMode = False
-#                                else:
-#                                    regexMode = False
-#                                    return em.setError(ReturnCode.ILL_FORMED_CONFIG_FILE)
+                                column = [item for item in
+                                    self.masterColumnNameList if item[0] == value]
+                                if column and len(column) == 1:
+                                    columnType = sqlTypeToInternalType(column[0][1])
+                                    sCount = str(regexCount)
+                                    self.config['columnType' + sCount] = columnType
+                                    regexCount += 1
+                                    regexMode = False
+                                else:
+                                    regexMode = False
+                                    return em.setError(ReturnCode.ILL_FORMED_CONFIG_FILE)
                             else:
                                 regexMode = False
                                 return em.setError(ReturnCode.ILL_FORMED_CONFIG_FILE)
