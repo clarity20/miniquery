@@ -1,16 +1,19 @@
-Sample data:
+Sample data
 -----------
 
-`qq\_sample\_db`: homemade data for pre-alpha testing-as-you-go
-`third-party/mywind`: a port of Microsoft's Northwind db from SQL Server to MySQL
+`qq_sample_db`: homemade data for pre-alpha testing-as-you-go
 
-Steps to prepare the cache for a database:
+`third-party/mywind`: an open-source version of the Northwind database
+
+Steps to prepare the cache for a database
 -----------------------------------------
 
 1. Create the db manually
+
     `mysql -u _user_ -h _host_ -e "CREATE DATABASE _dbName_" --password`
 
 2. Populate using the \*.sql files provided
+    
     `mysql -u _user_ -h _host_ -D _dbName_ < _dbName_.sql --password`
 
 3. Run queries to generate schema information for the db and each of its tables
