@@ -13,10 +13,13 @@ MINI_USER = ''
 MINI_HOST = ''
 MINI_PASSWORD = ''
 
+MINI_OPTIONS=''
+
 # Read the environment
 def setEnv():
     global HOME, MINI_HOME, MINI_CACHE, MINI_CONFIG
     global MINI_DBNAME, MINI_USER, MINI_HOST, MINI_PASSWORD
+    global MINI_OPTIONS
 
     # Load the optional environment settings
     HOME = os.environ['HOME']
@@ -34,9 +37,14 @@ def setEnv():
         MINI_CONFIG = MINI_HOME + '/config'
     try:
         # For security, allow password to be blank
-        MINI_PASSWORD = '=' + os.environ['MINI_PASSWORD']
+        MINI_PASSWORD = os.environ['MINI_PASSWORD']
     except KeyError:
         MINI_PASSWORD = ''
+
+    try:
+        MINI_OPTIONS = os.environ['MINI_OPTIONS']
+    except KeyError:
+        MINI_OPTIONS = ''
 
     # Load the required environment settings
     try:

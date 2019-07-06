@@ -8,6 +8,22 @@ class HelpType(Enum):
     FULL_HELP  = 2
     NO_HELP    = 3
 
+def giveMiniHelp():
+    print('MINIQUERY')
+    print('Copyright (c) 2019 by Michael Wood\n')
+    print('Usage:')
+    print('    mini [options] [table] [query parts ...]')
+    print('With no arguments, enters the MiniQuery command prompt.\n')
+    print('Options:')
+    print('    -e  Process a single query and exit')
+    print('    -q  Show the generated SQL query')
+    print('    -r  Run the query')
+    print('\n')
+    print('table: main table name for query.')
+
+    return ReturnCode.SUCCESS
+
+
 def giveHelp(programName_0, helpType = HelpType.FULL_HELP, objectName_0 = '',
                 trailingArguments = '[-{option} | {query_component}] [...]'):
     a, b, programName = programName_0.rpartition('/')   # get basename

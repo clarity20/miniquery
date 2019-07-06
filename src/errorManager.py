@@ -42,11 +42,13 @@ class ErrorManager:
 
         if msgOverride != '':
             self.errMsg = msgOverride
+            self.returnCode = code
         else:
             template = errorMsgDict[code.value]
             self.errMsg = template.format(*args) if args else template
+            self.returnCode = code
 
-        return ReturnCode.SUCCESS
+        return self.returnCode
 
     def doExit(self, msg=None):
         print(msg if msg else self.errMsg, file=self.errOutputStream)
