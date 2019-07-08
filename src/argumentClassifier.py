@@ -1,3 +1,5 @@
+import re
+
 import miniEnv as env
 from shlex import split
 

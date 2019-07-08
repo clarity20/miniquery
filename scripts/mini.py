@@ -13,13 +13,9 @@ from errorManager import miniErrorManager as em, ReturnCode
 from configManager import miniConfigManager as cfg
 from argumentClassifier import miniArgs as args
 
-# Inspired by https://opensource.com/article/17/5/4-practical-python-libraries
+# Reference: opensource.com/article/17/5/4-practical-python-libraries
 
-# I would want to visit the GitHub page for python-prompt-toolkit and write
-# my own completer based on the FuzzyCompleter in the completion subdir.
 MINI_PROMPT='mini>> '
-MINI_HISTFILE='mini.hst'     #TODO Test for existence/createability and writeability
-MINI_OPTIONS='-q -e'    # query and single-command mode
 
 def main():
     if '-h' in sys.argv or '--help' in sys.argv:
@@ -47,18 +43,16 @@ def main():
     # Pseudo-infinite event loop
     while 1:
 
-        # With options, the specified ones need to override the MINI_OPTIONS,
-        #   being careful about long-vs-short forms and opposite pairs like -e/-i (run modes) 
-        #   and -a/-o (main conjunctions) and options that take values and those that do not
         # Think through how options should be handled differently in interactive mode
         #   when processing subsequent commands: MINI_OPTIONS, persistent options, etc.
-        #
 
         # Accept normal MINIQUERY input. Break it down into arguments correctly.
         # We prolly do not want to run an autocompleter.
+#TODO Test for existence/createability and writeability
+        histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
         cmd = prompt(MINI_PROMPT,
-                history=MINI_HISTFILE)
-        argv = shlex.split(cmd)
+                history = FileHistory(histFileName))
+        argv = split(cmd)
 
         # Skip what follows, come back to it later
         if False:
@@ -78,6 +72,8 @@ def main():
             # old options. Cursor movement disables completion.
             s = prompt('MAW >> ',
                     history=FileHistory('t2.hst'),
+                    # Visit the GitHub page for python-prompt-toolkit for help writing a custom
+                    # autocompleter based on the FuzzyCompleter in the completion subdir.
                     completer=choiceDict,
                     default='Default'
                     )

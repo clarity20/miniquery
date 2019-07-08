@@ -2,14 +2,15 @@ import sys
 import os
 import re
 import subprocess
-from getpass import getpass
 from enum import Enum
+from sqlalchemy.sql import text
 #import pysnooper
 
 import miniEnv as env
 from miniUtils import sqlTypeToInternalType
 from errorManager import miniErrorManager as em, ReturnCode
 from expanderEngine import miniExpanderEngine as exp
+from databaseConnection import miniDbConnection as dbConn
 #from spellingExpander import spellExpander
 
 class RegexType(Enum):
@@ -30,27 +31,18 @@ class ConfigManager:
     def loadTableNameList(self, tableListFile):
         try:
             # Create a list of table names
-            tablesFp = open(tableListFile, 'r')
-            self.masterTableNameList = tablesFp.read().splitlines()
-            tablesFp.close()
+            with open(tableListFile, 'r') as tablesFp:
+                self.masterTableNameList = [tuple(l.rstrip().split('\t')) for l in tablesFp]
 
         except FileNotFoundError:
-            #TODO We need to run the query below against the RDBMS engine, whatever it is.
-            #TODO in such a way as to produce a headless tab-delimited result set.
-            #TODO The main result-set code should INCLUDE the header row for display to the end user.
-            if env.MINI_PASSWORD == '':
-                env.MINI_PASSWORD = getpass('Enter password: ')
-            cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
-            + ' -B -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema=\'' \
-            + env.MINI_DBNAME + '\'" --password=' + env.MINI_PASSWORD
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            if proc.returncode != 0:
-                return em.setError(proc.returnCode, 'Error ' \
-                        + proc.returncode.str() + ' in query execution engine.')
+            query = "SELECT {} FROM {} WHERE {} = '{}'".format(
+                        "table_name",
+                        "information_schema.tables",
+                        "table_schema",
+                        env.MINI_DBNAME)
 
-            self.masterTableNameList = stdout.decode('utf-8').splitlines()
+            resultSet = dbConn.getConnection().execute(text(query))
+            self.masterTableNameList = resultSet.fetchall()   # list of tuples
 
         return ReturnCode.SUCCESS
 
@@ -69,21 +61,14 @@ class ConfigManager:
                 tableSchema = env.MINI_DBNAME
                 tableName = re.search(r'(.*)\.columns$', tableDescFile).group(1)
 
-            if env.MINI_PASSWORD == '':
-                env.MINI_PASSWORD = getpass('Enter password: ')
-            cmd = 'mysql -u ' + env.MINI_USER + ' -h ' + env.MINI_HOST \
-            + ' -B -N -e "SELECT column_name, column_type, column_default ' \
-            + 'FROM information_schema.columns WHERE table_schema=\'' \
-            + tableSchema + '\' AND table_name=\'' + tableName + '\' \
-            " --password=' + env.MINI_PASSWORD
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            if proc.returncode != 0:
-                return em.setError(proc.returnCode, 'Error ' \
-                        + proc.returncode.str() + ' in query execution engine.')
+            query = "SELECT {} FROM {} WHERE {} = '{}' AND {} = '{}'".format(
+                    'column_name, column_type, column_default',
+                    'information_schema.columns',
+                    'table_schema', tableSchema,
+                    'table_name', tableName)
 
-            self.masterColumnNameList = stdout.decode('utf-8').splitlines()
+            resultSet = dbConn.getConnection().execute(text(query))
+            self.masterColumnNameList = resultSet.fetchall()   # list of tuples
 
         return ReturnCode.SUCCESS
 
