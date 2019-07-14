@@ -23,10 +23,11 @@ class RegexType(Enum):
 
 class ConfigManager:
 
-    # Class-level member data
-    config = {}                  # dict of k-v pairs
-    masterTableNameList = []     # list of names
-    masterColumnNameList = []    # list of tuples
+    # member data
+    def __init__(self):
+        self.config = {}                  # dict of k-v pairs
+        self.masterTableNameList = []     # list of names
+        self.masterColumnNameList = []    # list of tuples
 
     def loadTableNameList(self, tableListFile):
         try:

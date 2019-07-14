@@ -12,6 +12,8 @@ from minihelp import giveMiniHelp
 from errorManager import miniErrorManager as em, ReturnCode
 from configManager import miniConfigManager as cfg
 from argumentClassifier import miniArgs as args
+from databaseConnection import miniDbConnection as dbConn
+from queryProcessor import miniQueryProcessor as queryProcessor
 
 # Reference: opensource.com/article/17/5/4-practical-python-libraries
 
@@ -27,17 +29,17 @@ def main():
 
     args.classify(sys.argv[1:])
 
-    oneAndDoneMode = '-e' in args.options
+    oneAndDoneMode = 'e' in args.options
 
     if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
         em.doExit()
 
     if oneAndDoneMode:
         print('In one and done mode.')
-        # inflateQuery()
-        # runQuery()
-        # if queryType == SELECT:
-        #     displayResultSet()
+        # NO - just one execution, so what we have is what we need:
+        #      args.classify(...)
+        queryProcessor.process()
+
         em.doExit()
 
     # Pseudo-infinite event loop
