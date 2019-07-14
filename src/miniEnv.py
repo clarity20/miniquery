@@ -44,7 +44,7 @@ def setEnv():
     except KeyError:
         MINI_CONFIG = MINI_HOME + '/config'
 
-    MINI_OPTIONS = _readOptionalVariable('MINI_PASSWORD')
+    MINI_OPTIONS = _readOptionalVariable('MINI_OPTIONS')
 
     # Load the required environment settings
     try:
@@ -82,5 +82,5 @@ def _readOptionalVariable(varName):
     try:
         return os.environ[varName]
     except KeyError:
-        return None
+        return ''
 
