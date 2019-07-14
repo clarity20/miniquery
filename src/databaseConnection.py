@@ -5,13 +5,18 @@ from sqlalchemy import create_engine
 class databaseConnection():
     _cxn = None
 
+    def __del__(self):
+        if self._cxn:
+            self._cxn.close()
+
     def getConnection(self):
         if self._cxn:
             return self._cxn
         
         # Construct the connection string from the connection parms.
         # See www.github.com/xo/usql for a good discussion of the possibilities.
-
+        # Even better is https://docs.sqlalchemy.org/en/13/core/
+        #                       engines.html#sqlalchemy.create_engine
         if env.MINI_CONNECTION_STRING:
             engine = create_engine(env.MINI_CONNECTION_STRING)
             self._cxn = engine.connect()
@@ -74,15 +79,8 @@ class databaseConnection():
 
         # Finally:
         connStr = '{}://{}'.format(driverPart, rightHandSide)
-        print("Connection string:")
-        print(connStr)
-
         engine = create_engine(connStr)
-        print("engine:")
-        print(engine)
         self._cxn = engine.connect()
-        print("dbConn:")
-        print(self._cxn)
 
         return self._cxn
 
