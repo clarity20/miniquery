@@ -35,7 +35,6 @@ def main():
         em.doExit()
 
     if oneAndDoneMode:
-        print('In one and done mode.')
         # NO - just one execution, so what we have is what we need:
         #      args.classify(...)
         queryProcessor.process()
