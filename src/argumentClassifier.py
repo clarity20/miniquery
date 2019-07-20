@@ -4,13 +4,14 @@ import miniEnv as env
 from shlex import split
 
 class argumentClassifier:
-    # Let data be global as there should only be one instance
-    mainTableName = ''
-    options = {}
-    preSelects = []
-    postSelects = []
-    wheres = []
-    updates = []
+
+    def __init__(self):
+        self.mainTableName = ''
+        self.options = {}
+        self.preSelects = []
+        self.postSelects = []
+        self.wheres = []
+        self.updates = []
 
     def _toggleOptions(self, setTo, value1, value2):
         if setTo == value1:
@@ -72,4 +73,3 @@ class argumentClassifier:
             else:
                 self.wheres.append(arg)
 
-miniArgs = argumentClassifier()

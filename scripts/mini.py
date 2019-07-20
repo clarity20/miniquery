@@ -1,7 +1,7 @@
 import os
 import sys
 from shlex import split
-from prompt_toolkit import prompt
+from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 
@@ -11,11 +11,9 @@ import miniEnv as env
 from minihelp import giveMiniHelp
 from errorManager import miniErrorManager as em, ReturnCode
 from configManager import miniConfigManager as cfg
-from argumentClassifier import miniArgs as args
+from argumentClassifier import argumentClassifier
+from queryProcessor import queryProcessor
 from databaseConnection import miniDbConnection as dbConn
-from queryProcessor import miniQueryProcessor as queryProcessor
-
-# Reference: opensource.com/article/17/5/4-practical-python-libraries
 
 MINI_PROMPT='mini>> '
 
@@ -27,32 +25,64 @@ def main():
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
+    # If the standard input has been redirected, execute its commands
+    # and quickly exit, as in mysql
+    if not sys.stdin.isatty():
+        oldTableName = ''
+        while 1:
+            cmd = sys.stdin.readline()
+            if not cmd:
+                break
+            #TODO This handles queries only. We should also accept miniquery cmds:
+            #TODO look for the command prefix at cmd[0]
+            argv = split(cmd)
+            args = argumentClassifier()
+            args.classify(argv)
+
+            # Reconfigure if/when the table name changes
+            if args.mainTableName != oldTableName:
+                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                    em.doExit()
+                oldTableName = args.mainTableName
+
+            # Finally:
+            queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
+
+        em.doExit()
+
+    args = argumentClassifier()
     args.classify(sys.argv[1:])
-
-    oneAndDoneMode = 'e' in args.options
-
     if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
         em.doExit()
 
+    # In one-and-done mode, execute the cmd and exit
+    oneAndDoneMode = 'e' in args.options
     if oneAndDoneMode:
-        # NO - just one execution, so what we have is what we need:
-        #      args.classify(...)
-        queryProcessor.process()
-
+        queryProcessor(args).process()
         em.doExit()
 
-    # Pseudo-infinite event loop
-    while 1:
+    # If there is a query on the command line, accept it
+    if args.mainTableName and args.wheres or args.updates or args.postSelects:
+        queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
 
-        # Think through how options should be handled differently in interactive mode
-        #   when processing subsequent commands: MINI_OPTIONS, persistent options, etc.
+    # Pseudo-infinite event loop
+    print('Welcome to MINIQUERY!\n')
+    print('Copyright (c) 2019 Miniquery\n')
+    print('Enter :h or :help for help.\n')
+    histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
+    session = PromptSession(history = FileHistory(histFileName))
+    while 1:
 
         # Accept normal MINIQUERY input. Break it down into arguments correctly.
         # We prolly do not want to run an autocompleter.
 #TODO Test for existence/createability and writeability
-        histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
-        cmd = prompt(MINI_PROMPT,
-                history = FileHistory(histFileName))
+        try:
+            cmd = session.prompt(MINI_PROMPT)
+            print('Received data: ' + cmd)
+        except EOFError:
+            # Is cxn closed and is everything cleaned up?
+            break
+
         argv = split(cmd)
 
         # Skip what follows, come back to it later
@@ -81,10 +111,6 @@ def main():
             if s == 'Done.':
                 break
             print ('You said ' + s)
-
-        if oneAndDoneMode:
-            # cxn must be closed
-            sys.exit(0)
 
 # Main entry point.
 if __name__ == '__main__':

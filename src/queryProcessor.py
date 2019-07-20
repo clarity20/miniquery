@@ -4,26 +4,26 @@ from sqlalchemy.sql import text
 
 from miniUtils import QueryType
 from configManager import miniConfigManager as cfg
-from argumentClassifier import miniArgs as args
 from databaseConnection import miniDbConnection as dbConn
 from errorManager import miniErrorManager as em, ReturnCode
 
-class queryProcessor():
-    # Reset or re-instantiate mbr data for every query?
-    def __init__(self):
+class queryProcessor:
+
+    def __init__(self, arguments):
         self.query = ''
         self.queryType = QueryType.SELECT
         self.columnToSortBy = ''
+        self.arguments = arguments
 
     def process(self):
         self.inflateQuery()
-        if 'q' in args.options:
+        if 'q' in self.arguments.options:
             print(self.query)
-        if 'r' in args.options:
+        if 'r' in self.arguments.options:
             self.runAndDisplayResult()
 
     def inflateQuery(self):
-        self.query = "SELECT * from table1 LIMIT 4" # WHERE id >= 3"
+        self.query = "SELECT * from table1 LIMIT 4" #MMMM WHERE id >= 3"
         self.queryType = QueryType.SELECT
 
     def runAndDisplayResult(self):
@@ -36,7 +36,7 @@ class queryProcessor():
             return em.setError(ReturnCode.EMPTY_RESULT_SET)
 
         columnHdrs = resultSet.keys()
-        if 'tab' in args.options:
+        if 'tab' in self.arguments.options:
             print(*columnHdrs, sep='\t')
             while True:
                 # don't use too much memory
@@ -64,7 +64,7 @@ class queryProcessor():
 
             # Wrapless or word-wrapped printout
             screenWidth, b = os.get_terminal_size()
-            if 'nowrap' in args.options or sum(columnWidths) + columnCount < screenWidth:
+            if 'nowrap' in self.arguments.options or sum(columnWidths) + columnCount < screenWidth:
                 format = " ".join(["%%-%ss" % l for l in columnWidths])
                 result = [format % tuple(columnHdrs)]
                 result.append('')
@@ -151,4 +151,3 @@ class queryProcessor():
                 # The result has been fully printed out in chunks
                 return ReturnCode.SUCCESS
 
-miniQueryProcessor = queryProcessor()
