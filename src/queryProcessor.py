@@ -15,19 +15,31 @@ class queryProcessor:
         self.columnToSortBy = ''
         self.arguments = arguments
 
-    def process(self):
-        self.inflateQuery()
+    def process(self, sql=''):
+        ret = ReturnCode.SUCCESS
+        if sql:
+            self.query = sql
+        else:
+            ret = self.inflateQuery()
+            if ret != ReturnCode.SUCCESS:
+                return ret
         if 'q' in self.arguments.options:
             print(self.query)
         if 'r' in self.arguments.options:
-            self.runAndDisplayResult()
+            ret = self.runAndDisplayResult()
+            if ret != ReturnCode.SUCCESS:
+                return ret
+        return ret
 
     def inflateQuery(self):
         self.query = "SELECT * from table1 LIMIT 4" #MMMM WHERE id >= 3"
         self.queryType = QueryType.SELECT
 
     def runAndDisplayResult(self):
-        resultSet = dbConn.getConnection().execute(text(self.query))
+        conn = dbConn.getConnection()
+        if em.getError() != ReturnCode.SUCCESS:
+            return em.getError()
+        resultSet = conn.execute(text(self.query))
 
         # Displaying a result set only makes sense for SELECTs that found stg
         if self.queryType != QueryType.SELECT:
