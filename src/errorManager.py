@@ -12,6 +12,8 @@ class ReturnCode(Enum):
     DESCRIPTION_FILE_READ = 7
     INVALID_DATE = 8
     UNBALANCED_PARENTHESES = 9
+    USER_EXIT = 10
+    DATABASE_CONNECTION_ERROR = 11
 
 errorMsgDict = {
     0 : '',
@@ -23,7 +25,9 @@ errorMsgDict = {
     6 : 'Invalid type for expression "{0}".',
     7 : 'Cannot read {0} description file "{1}".',
     8 : 'Invalid date expression.',
-    9 : 'Error: Unbalanced parentheses in argument {0}.'
+    9 : 'Error: Unbalanced parentheses in argument {0}.',
+    10 : 'Filler error message not to be returned by the program.',
+    11 : 'Database connection error: {0}, {1}',
     }
 
 class ErrorManager:
@@ -50,8 +54,19 @@ class ErrorManager:
 
         return self.returnCode
 
+    def getError(self):
+        return self.returnCode
+
     def doExit(self, msg=None):
         print(msg if msg else self.errMsg, file=self.errOutputStream)
         sys.exit(self.returnCode.value)
+
+    # Warn: For situations that warrant giving the user a chance to
+    # fix things up instead of totally exiting the program
+    def doWarn(self, msg=None):
+        print(msg if msg else self.errMsg, file=self.errOutputStream)
+        # Wipe out the error state so the user can continue
+        self.returnCode = ReturnCode.SUCCESS
+        self.errMsg = ''
 
 miniErrorManager = ErrorManager()
