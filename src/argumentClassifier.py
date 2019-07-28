@@ -23,7 +23,7 @@ class argumentClassifier:
         self.options[setTo] = None
 
     def classify(self, argList):
-        # Turn on the preconfigured settings first, then the command line ones
+        # Turn on the preconfigured settings first
         for arg in split(env.MINI_OPTIONS) + argList:
             if arg[0] == '-':
                 # Option arguments
