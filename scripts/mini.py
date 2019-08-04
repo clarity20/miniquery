@@ -8,27 +8,26 @@ from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 sys.path.append("../src/")
 
 import miniEnv as env
-from minihelp import giveMiniHelp
+from miniHelp import giveMiniHelp
+from appSettings import miniSettings as ms
 from errorManager import miniErrorManager as em, ReturnCode
 from configManager import miniConfigManager as cfg
 from argumentClassifier import argumentClassifier
 from queryProcessor import queryProcessor
 from databaseConnection import miniDbConnection as dbConn
 
-#Some of these settings should be made configurable
-MINI_PROMPT='mini>> '
+#TODO Some of these settings should be made configurable
+MINI_PROMPT='mini>> '   #TODO Try 'curDB.curTable >> '
 COMMAND_PREFIX='\\'   # another popular one is ':'
 
 miniVariables = {}
 args = argumentClassifier()
 
 #TODO non-writeable hist file gives an error!
-histFileName = ''
 historyObject = None
 
 def main():
     global args
-    global histFileName
     global historyObject
 
     if '-h' in sys.argv or '--help' in sys.argv:
@@ -37,6 +36,9 @@ def main():
 
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
+
+    if ms.loadSettings() != ReturnCode.SUCCESS:
+        em.doExit()
 
     # If the standard input has been redirected, execute its commands
     # and quickly exit, as in mysql
@@ -62,29 +64,31 @@ def main():
 
         em.doExit()
 
-    args.classify(sys.argv[1:])
-    if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
-        em.doExit()
+    args.classify(sys.argv[1:])   # skip the program name
 
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = 'e' in args.options
     if oneAndDoneMode:
+        if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+            em.doExit()
         queryProcessor(args).process()
         em.doExit()
 
     # If there is a query on the command line, accept it
     if args.mainTableName and args.wheres or args.updates or args.postSelects:
+        if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+            em.doExit()
         queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
 
     # Pseudo-infinite event loop
-    print('Welcome to MINIQUERY!\n')
+    print('WELCOME TO MINIQUERY!\n')
     print('Copyright (c) 2019 Miniquery\n')
     print('Enter {}h or {}help for help.\n'.format(COMMAND_PREFIX, COMMAND_PREFIX))
     histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
+    oldTableName = ''
     while 1:
-
         # Accept normal MINIQUERY input. Break it down into arguments correctly.
         try:
             cmd = session.prompt(MINI_PROMPT)
@@ -109,10 +113,31 @@ def main():
             # Call the function indicated by the first word
             word = argv[0].lstrip(COMMAND_PREFIX).lower()
             func = callbackMap[word]
-            if func(argv[1:]) == ReturnCode.USER_EXIT:
+            result = func(argv[1:])
+            if result == ReturnCode.USER_EXIT:
                 break
+            elif result != ReturnCode.SUCCESS:
+                # Allow the user to fix the connection settings and keep going.
+                #TODO This requires the ability to change the settings. One sit8n
+                #TODO is a failed cxn due to bad cxn strings, which are currently
+                #TODO formed from env vbls.
+                #TODO     So instead of using envs, use database-level configs.
+                #TODO (We already have table-level configs.)
+                #TODO Then verify the changes are actually activated
+                em.doWarn()
+                #TODO "continue" is the right action for broken connections.
+                #TODO But what about other paths to this code?
+                continue
         else:
             args.classify(argv)
+
+            # Reconfigure if/when the table name changes
+            #TODO: Move this to the callback for table-name changing
+            if args.mainTableName != oldTableName:
+                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                    em.doExit()
+                oldTableName = args.mainTableName
+
             if queryProcessor(argv).process() != ReturnCode.SUCCESS:
                 # Allow the user to fix the connection settings and keep going
                 #TODO Verify that changed environments are actually re-loaded
@@ -160,11 +185,10 @@ def doHelp(argv):
   *h{elp} <command>   : Detailed help for a command\n\
   *hi{story} <count>  : Display command history\n\
   *l{ist}             : List the stashed commands\n\
-  *m{ode}             : Select a SQL subfamily mode\n\
   *o{utput}           : Select an output format\n\
   *q{uit}             : Exit MINIQUERY\n\
   *r{estore}          : Restore a stashed command\n\
-  *state              : Summarize Miniquery state: settings & vars\n\
+  *st{ate}            : Summarize Miniquery state: settings & vars\n\
   *set <name> <value> : Set a MINIQUERY variable\n\
   *sq <query>         : Execute a literal SQL statement\n\
   *source <file>      : Read and execute commands from a file\n\
@@ -173,6 +197,9 @@ def doHelp(argv):
   *un{alias} <name>   : Undefine a command alias\n\
   *uns{et}            : Set a MINIQUERY variable\n\
   *. <file>           : Read and execute commands from a file'
+
+#TODO: Add these
+#*m{ode}             : Select a SQL subfamily mode\n\
 
         print(helpText.replace('*', COMMAND_PREFIX))
     else:
@@ -183,8 +210,7 @@ def doHelp(argv):
 def doSql(sql):
     global args  # The classified args. Should they be adjustable in the :sq cmd?
     #TODO: Make variable substitutions in the literal sql
-    queryProcessor(args).process(" ".join(sql))
-    return
+    return queryProcessor(args).process(" ".join(sql))
 
 def doQuit(argv):
     return ReturnCode.USER_EXIT

@@ -1,10 +1,13 @@
 import miniEnv as env
+from appSettings import miniSettings as ms
 from errorManager import miniErrorManager as em, ReturnCode
 from sqlalchemy import create_engine
 
 # Database connection class. Should be used like a singleton.
 class databaseConnection():
-    _cxn = None
+    def __init__(self):
+        self._cxn = None
+        self._gotPassword = False
 
     def __del__(self):
         if self._cxn:
@@ -24,41 +27,49 @@ class databaseConnection():
         if self._cxn:
             return self._cxn
         
+        cxnSettings = ms.settings['ConnectionString']
+        defType = cxnSettings['definitionType']
+
         # Construct the connection string from the connection parms.
         # See www.github.com/xo/usql for a good discussion of the possibilities.
         # Even better is https://docs.sqlalchemy.org/en/13/core/
         #                       engines.html#sqlalchemy.create_engine
-        if env.MINI_CONNECTION_STRING:
-            return self._tryToConnect(env.MINI_CONNECTION_STRING)
+        if defType == 'FullString':
+            return self._tryToConnect(cxnSettings[defType]['MINI_CONNECTION_STRING'])
 
         # Paths are a simple, special case
-        if env.MINI_DBPATH:
-            if env.MINI_DBENGINE:
-                connStr = '{}:{}'.format(env.MINI_DBENGINE, env.MINI_DBPATH)
+        elif defType == 'FullPath':
+            if cxnSettings[defType]['MINI_DBENGINE']:
+                connStr = '{}:{}'.format(cxnSettings[defType]['MINI_DBENGINE'],
+                        cxnSettings[defType]['MINI_DBPATH'])
             else:
-                connStr = env.MINI_DBPATH
+                connStr = cxnSettings[defType]['MINI_DBPATH']
 
             return self._tryToConnect(connStr)
 
         # General case: Build the string from the ground up
-        if env.MINI_DRIVER_OR_TRANSPORT:  # either the driver (odbc) or transport (udp)
-            driverPart = '{}+{}'.format(env.MINI_DBENGINE, env.MINI_DRIVER_TRANSPORT)
+        if cxnSettings[defType]['MINI_DRIVER_OR_TRANSPORT']: # odbc, udp, ...
+            driverPart = '{}+{}'.format(cxnSettings[defType]['MINI_DBENGINE'],
+                    cxnSettings[defType]['MINI_DRIVER_OR_TRANSPORT'])
         else:
-            driverPart = env.MINI_DBENGINE
+            driverPart = cxnSettings[defType]['MINI_DBENGINE']
 
         userPart = ''
-        if env.MINI_USER:
-            if not env.MINI_PASSWORD:
+        if cxnSettings[defType]['MINI_USER']:
+            if not cxnSettings[defType]['MINI_PASSWORD'] and not self._gotPassword:
                 from getpass import getpass
-                env.MINI_PASSWORD = getpass('Enter password: ')
-            userPart = '{}:{}'.format(env.MINI_USER, env.MINI_PASSWORD)
+                cxnSettings[defType]['MINI_PASSWORD'] = getpass('PLease enter password: ')
+                self._gotPassword = True  # Prevents repeated asks in a no-password situation
+            userPart = '{}:{}'.format(cxnSettings[defType]['MINI_USER'],
+                                    cxnSettings[defType]['MINI_PASSWORD'])
 
         hostPart = ''
-        if env.MINI_HOST:
-            if env.MINI_PORT:
-                hostPart = '{}:{}'.format(env.MINI_HOST, env.MINI_PORT)
+        if cxnSettings[defType]['MINI_HOST']:
+            if cxnSettings[defType]['MINI_PORT']:
+                hostPart = '{}:{}'.format(cxnSettings[defType]['MINI_HOST'],
+                                    cxnSettings[defType]['MINI_PORT'])
             else:
-                hostPart = env.MINI_HOST
+                hostPart = cxnSettings[defType]['MINI_HOST']
 
         if userPart and hostPart:
             # Insert an @ sign
@@ -68,11 +79,12 @@ class databaseConnection():
             userHostPart = '{}{}'.format(userPart, hostPart)
 
         dbNamePart = ''
-        if env.MINI_DBNAME:
-            if env.MINI_DRIVER_OPTIONS:
-                dbNamePart = '{}?{}'.format(env.MINI_DBNAME, env.MINI_DRIVER_OPTIONS)
+        if cxnSettings[defType]['MINI_DBNAME']:
+            if cxnSettings[defType]['MINI_DRIVER_OPTIONS']:
+                dbNamePart = '{}?{}'.format(cxnSettings[defType]['MINI_DBNAME'],
+                                cxnSettings[defType]['MINI_DRIVER_OPTIONS'])
             else:
-                dbNamePart = env.MINI_DBNAME
+                dbNamePart = cxnSettings[defType]['MINI_DBNAME']
 
         # Finalize the right-hand side
         rightHandSide = ''
