@@ -5,7 +5,7 @@ import sys
 
 sys.path.append("/data/data/com.termux/files/home/projects/miniquery/src/")
 import miniEnv as env
-from minihelp import HelpType, shouldHelpOrExecute, giveHelp
+from miniHelp import HelpType, shouldHelpOrExecute, giveHelp
 from errorManager import miniErrorManager as em, ReturnCode
 from configManager import miniConfigManager
 
