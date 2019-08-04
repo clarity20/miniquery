@@ -14,6 +14,7 @@ class ReturnCode(Enum):
     UNBALANCED_PARENTHESES = 9
     USER_EXIT = 10
     DATABASE_CONNECTION_ERROR = 11
+    MISSING_SETTINGS_FILE = 12
 
 errorMsgDict = {
     0 : '',
@@ -28,6 +29,7 @@ errorMsgDict = {
     9 : 'Error: Unbalanced parentheses in argument {0}.',
     10 : 'Filler error message not to be returned by the program.',
     11 : 'Database connection error: {0}, {1}',
+    12 : 'Application settings file "{0}" missing or unreadable.',
     }
 
 class ErrorManager:
