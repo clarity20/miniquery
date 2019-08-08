@@ -7,18 +7,15 @@ from configobj import ConfigObj
 # with the database "configurations").
 
 class appSettings():
-    # The global program settings are stored in
-    # $MINI_CONFIG/mini.cfg.
-    # These can be customized at the user level with $HOME/.mini.rc.
+    # The global program settings are stored in $MINI_CONFIG/mini.cfg.
+    # They can be customized at the user level with $HOME/.mini.rc.
 
     def __init__(self):
         self.settings = None
 
     def loadSettings(self):
-        # Load the application-level settings. There is an application settings
-        # file which the user may supplement/override with their own file.
-        globalSettingsFile = env.MINI_CONFIG + '/mini.cfg'
-        userSettingsFile = env.HOME + '/mini.rc'
+        globalSettingsFile = os.path.join(env.MINI_CONFIG, '/mini.cfg')
+        userSettingsFile = os.path.join(env.HOME, '/.mini.rc')
         if not os.path.isfile(globalSettingsFile):
             return em.setError(ReturnCode.MISSING_SETTINGS_FILE, globalSettingsFile)
         self.settings = ConfigObj(globalSettingsFile)
@@ -27,7 +24,7 @@ class appSettings():
             self.settings.merge(userSettings)
         return ReturnCode.SUCCESS
 
-# Initialize a global object that can be made visible everywhere with
+# Instantiate a global object that can be made visible everywhere with
 # an easy import. Function main() will populate it. 
 # Better than passing it all over as a function parameter.
 miniSettings = appSettings()
