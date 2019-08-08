@@ -58,7 +58,7 @@ class databaseConnection():
         if cxnSettings[defType]['MINI_USER']:
             if not cxnSettings[defType]['MINI_PASSWORD'] and not self._gotPassword:
                 from getpass import getpass
-                cxnSettings[defType]['MINI_PASSWORD'] = getpass('PLease enter password: ')
+                cxnSettings[defType]['MINI_PASSWORD'] = getpass('Please enter password: ')
                 self._gotPassword = True  # Prevents repeated asks in a no-password situation
             userPart = '{}:{}'.format(cxnSettings[defType]['MINI_USER'],
                                     cxnSettings[defType]['MINI_PASSWORD'])
@@ -79,12 +79,13 @@ class databaseConnection():
             userHostPart = '{}{}'.format(userPart, hostPart)
 
         dbNamePart = ''
-        if cxnSettings[defType]['MINI_DBNAME']:
+        dbName = ms.settings['Settings']['database']
+        if dbName:
             if cxnSettings[defType]['MINI_DRIVER_OPTIONS']:
-                dbNamePart = '{}?{}'.format(cxnSettings[defType]['MINI_DBNAME'],
+                dbNamePart = '{}?{}'.format(dbName,
                                 cxnSettings[defType]['MINI_DRIVER_OPTIONS'])
             else:
-                dbNamePart = cxnSettings[defType]['MINI_DBNAME']
+                dbNamePart = dbName
 
         # Finalize the right-hand side
         rightHandSide = ''
