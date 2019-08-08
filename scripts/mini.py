@@ -4,6 +4,7 @@ from shlex import split
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
+from prompt_toolkit.shortcuts import yes_no_dialog
 
 sys.path.append("../src/")
 
@@ -20,8 +21,8 @@ from databaseConnection import miniDbConnection as dbConn
 MINI_PROMPT='mini>> '   #TODO Try 'curDB.curTable >> '
 COMMAND_PREFIX='\\'   # another popular one is ':'
 
-miniVariables = {}
 args = argumentClassifier()
+settingsChanged = False
 
 #TODO non-writeable hist file gives an error!
 historyObject = None
@@ -37,7 +38,9 @@ def main():
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
-    if ms.loadSettings() != ReturnCode.SUCCESS:
+    if ms.loadSettings() == ReturnCode.SUCCESS:
+        env.setDatabaseName(ms.settings['Settings']['database'])
+    else:
         em.doExit()
 
     # If the standard input has been redirected, execute its commands
@@ -114,19 +117,16 @@ def main():
             word = argv[0].lstrip(COMMAND_PREFIX).lower()
             func = callbackMap[word]
             result = func(argv[1:])
-            if result == ReturnCode.USER_EXIT:
+            if result == ReturnCode.SUCCESS:
+                pass
+            elif result == ReturnCode.USER_EXIT:
                 break
-            elif result != ReturnCode.SUCCESS:
+            elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
                 # Allow the user to fix the connection settings and keep going.
                 #TODO This requires the ability to change the settings. One sit8n
-                #TODO is a failed cxn due to bad cxn strings, which are currently
-                #TODO formed from env vbls.
-                #TODO     So instead of using envs, use database-level configs.
-                #TODO (We already have table-level configs.)
-                #TODO Then verify the changes are actually activated
+                #TODO is a failed cxn due to bad cxn strings.
+                #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
                 em.doWarn()
-                #TODO "continue" is the right action for broken connections.
-                #TODO But what about other paths to this code?
                 continue
         else:
             args.classify(argv)
@@ -179,27 +179,30 @@ def doHelp(argv):
         print('\nMINIQUERY COMMANDS:\n')
 
         helpText = '  *al{ias} <new> <old>: Define an alias for a command\n\
-  *c{lear} <name>     : Clear the default table name\n\
-  *d{rop}             : Drop a stashed command\n\
-  *exit               : Exit MINIQUERY\n\
+  *s{ave}             : Save MINIQUERY user settings\n\
+  *exit, *q{uit}      : Exit MINIQUERY\n\
   *h{elp} <command>   : Detailed help for a command\n\
   *hi{story} <count>  : Display command history\n\
+  *t{able} <name>     : Set the default table name\n\
+  *clear <name>       : Clear the default table name\n\
+  *ct <name>          : Clear the default table name\n\
+  *d{rop}             : Drop a stashed command\n\
   *l{ist}             : List the stashed commands\n\
   *o{utput}           : Select an output format\n\
-  *q{uit}             : Exit MINIQUERY\n\
   *r{estore}          : Restore a stashed command\n\
   *st{ate}            : Summarize Miniquery state: settings & vars\n\
-  *set <name> <value> : Set a MINIQUERY variable\n\
+  *set <name>=<value> : Set/inspect a MINIQUERY program setting\n\
   *sq <query>         : Execute a literal SQL statement\n\
   *source <file>      : Read and execute commands from a file\n\
   *stash              : Stash and suspend the current command\n\
-  *t{able} <name>     : Set the default table name\n\
   *un{alias} <name>   : Undefine a command alias\n\
-  *uns{et}            : Set a MINIQUERY variable\n\
+  *uns{et}            : Unset a MINIQUERY setting\n\
+  *v{ariable} <name>=<val> : Set/inspect a variable\n\
   *. <file>           : Read and execute commands from a file'
 
 #TODO: Add these
 #*m{ode}             : Select a SQL subfamily mode\n\
+#*ab{brev}           : Define an object-name abbreviation\n\
 
         print(helpText.replace('*', COMMAND_PREFIX))
     else:
@@ -213,39 +216,73 @@ def doSql(sql):
     return queryProcessor(args).process(" ".join(sql))
 
 def doQuit(argv):
-    return ReturnCode.USER_EXIT
+    global settingsChanged
+
+    if settingsChanged:
+        choice = button_dialog(title='Save before quitting?',
+                text='Save changes to your MINIQUERY settings before quitting?'
+                buttons=[('Yes',True), ('No',False), ('Cancel',None)])
+        if choice:
+            ms.settings.filename = env.HOME + '/mini.rc'
+            ms.settings.write()
+        elif choice == None:
+            return ReturnCode.SUCCESS
+        elif choice == False:
+            return ReturnCode.USER_EXIT
+    else:
+        if yes_no_dialog(title='Quit MINIQUERY',
+                text='Exit MINIQUERY: Are you sure?'):
+            return ReturnCode.USER_EXIT
+
+def doSave(argv):
+    global settingsChanged
+
+    if settingsChanged:
+        # Save program settings, variables and aliases
+        if yes_no_dialog(title='Confirm save',
+                text='Save changes to your MINIQUERY settings?'):
+            ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
+            ms.settings.write()
+            settingsChanged = False
+    return
 
 def doHistory(argv):
-    #TODO: Set a default history depth.
     global historyObject
+    argc = len(argv)
+
     l = list(reversed(historyObject.get_strings()))
-    print("\n".join(l[0:int(argv[0])]))
+    available = len(l)
+    requested = int(argv[0] if argc > 0 else ms.settings['Settings']['historyLength'])
+    print("\n".join(l[0:min(available, requested)]))
     return
 
 def doMode(argv):
+    global settingsChanged
+
+    # Not yet implemented
+    settingsChanged = True
     return
 
 def doOutput(argv):
-    return
+    global settingsChanged
 
-def doSet(argv):
-    # Use miniVariables defined up top
-    return
-
-def doUnset(argv):
-    # Use miniVariables defined up top
+    # Select an output format
+    settingsChanged = True
     return
 
 def doSetTable(argv):
+    global settingsChanged
+
+    #TODO: Allow for abbreviated table names by expanding here
+    ms.settings['Settings']['table'] = argv[0]
+    settingsChanged = True
     return
 
 def doClearTable(argv):
-    return
+    global settingsChanged
 
-def doAlias(argv):
-    return
-
-def doUnalias(argv):
+    ms.settings['Settings']['table']=''
+    settingsChanged = True
     return
 
 def doStash(argv):
@@ -261,7 +298,106 @@ def doRestore(argv):
     return
 
 def doSource(argv):
+    # Source a command file, a lot like input redirection
     return
+
+def doSet(argv):
+    #TODO:This might not work because settings are not flat like aliases and variables are
+    argc = len(argv)
+    category = 'Settings'
+    subcategory = None
+
+    if argc == 2:
+        varName = argv[0]
+    elif argc == 1 and '=' in argv[0]:
+        varName, eq, b = argv[0].partition('=')
+    for d in ms.settings['ConnectionString']:`
+        if isinstance(d, dict) and varName in d:
+            category = 'ConnectionString'
+            subcategory = d
+            break
+
+    _setValueCommand(argv, 'settingName', 'value', category, 'choice of setting', subcategory)
+    return
+
+def doUnset(argv):
+    #TODO:This might not work because settings are not flat like aliases and variables are
+    category = 'Settings'
+    subcategory = None
+    for d in ms.settings['ConnectionString']:`
+        if isinstance(d, dict) and varName in d:
+            category = 'ConnectionString'
+            subcategory = d
+            break
+
+    _unsetValueCommand(argv, 'settingName', category, subcategory)
+    return
+
+def doAlias(argv):
+    _setValueCommand(argv, 'alias', 'command', 'Aliases', 'a native command')
+    return
+
+def doUnalias(argv):
+    _unsetValueCommand(argv, 'aliasName', 'Aliases')
+    return
+
+def doSetVariable(argv):
+    _setValueCommand(argv, 'name', 'value', 'Variables', 'text to be substituted')
+    return
+
+def doUnsetVariable(argv):
+    _unsetValueCommand(argv, 'variable', 'Variables')
+    return
+
+def _setValueCommand(argv, lhs, rhs, category, desc, subcategory=None):
+    global settingsChanged
+    argc = len(argv)
+    #TODO: handle subcategoried values
+
+    # Set or query a MINIQUERY system value, depending on argc
+    if argc == 0:
+        print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}>'.format(
+            argv[0], lhs, rhs))
+        print('    where <{}> is {}'.format(rhs, desc))
+    elif argc == 1:
+        # Value assignment
+        if '=' in argv[0]:
+            var, eq, val = argv[0].partition('=')
+            if subcategory:
+                ms.settings[category][subcategory][var] = val
+            else:
+                ms.settings[category][var] = val
+            settingsChanged = True
+        # Value inquiry
+        elif argv[0] in ms.settings[category]:
+            print('{}: {}'.format(argv[0], ms.settings[category][argv[0]]))
+        else:
+            print('{} is not defined.'.format(argv[0]))
+    elif argc == 2:
+        if subcategory:
+            ms.settings[category][subcategory][argv[0]] = argv[1]
+        else:
+            ms.settings[category][argv[0]] = argv[1]
+        settingsChanged = True
+    return ReturnCode.SUCCESS
+
+def _unsetValueCommand(argv, objName, category):
+    global settingsChanged
+
+    argc = len(argv)
+    if argc != 2:
+        print('USAGE: {} <{}>'.format(argv[0], objName))
+        return
+    else:
+        if category == 'Settings':
+            # Settings cannot be *removed*
+            print('Error: MINIQUERY system setting "' + objName
+                    + '" can only be changed, not unset.')
+            return
+        else:
+            del ms.settings[category][argv[0]]
+            settingsChanged = True
+        return
 
 callbackMap = {
         'h'      : doHelp,
@@ -276,17 +412,22 @@ callbackMap = {
         'mode'   : doMode,
         'o'      : doOutput,
         'output' : doOutput,
+        's'      : doSave,
+        'save'   : doSave,
         'set'    : doSet,
+        'unset'  : doUnset,
         'uns'    : doUnset,
         'alias'  : doAlias,
         'al'     : doAlias,
         'unalias': doUnalias,
         'un'     : doUnalias,
-        'unset'  : doUnset,
+        'v'      : doSetVariable,
+        'setv'   : doSetVariable,
+        'unsetv' : doUnsetVariable,
         'table'  : doSetTable,
         't'      : doSetTable,
         'clear'  : doClearTable,
-        'c'      : doClearTable,
+        'ct'     : doClearTable,
         'stash'  : doStash,
         'l'      : doList,
         'list'   : doList,
