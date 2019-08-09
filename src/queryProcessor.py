@@ -59,13 +59,35 @@ class queryProcessor:
                     print(*row, sep='\t')
             return ReturnCode.SUCCESS
         else:
-            # Fetch all rows at once. A fetchmany() loop would use less memory
-            # but would not allow us to adjust the column widths for NULLs
-            rows = resultSet.fetchall()
             types = resultSet._cursor_description()
             columnCount = len(types)
             columnWidths = [max(types[i][2], len(columnHdrs[i])) # [2] = display_size
                             for i in range(columnCount)]
+
+            if 'vertical' in self.arguments.options:
+                nameWidth = max([len(columnHdrs[i]) for i in range(columnCount)])
+                # Format is "column name : value" repeated over the columns.
+                # In the next line we precompute the format pieces and concat.
+                format = '\n'.join(['{0:>{width}}: %s'.
+                            format(h, width=nameWidth) for h in columnHdrs])
+                count = 0
+                while True:
+                    rows = resultSet.fetchmany()
+                    if not rows:
+                        break
+                    for row in rows:
+                        # The banner: * is fill, ^ is centering, 62 is width,
+                        # all to mimic mysql's behavior
+                        print('{0:*^62}'.format(' %d. row ' % count))
+                        # The data: write the values into the prepared format
+                        print(format % tuple(row.values()))
+                        count += 1
+
+                return ReturnCode.SUCCESS
+
+            # Fetch all rows at once. A fetchmany() loop would use less memory
+            # but would not allow us to adjust the column widths for NULLs
+            rows = resultSet.fetchall()
 
             # If necessary, widen columns to accommodate NULLs
             for col in range(columnCount):
@@ -84,7 +106,7 @@ class queryProcessor:
                     result.append(format % tuple([x or 'NULL' for x in row.values()]))
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
-            else:
+            elif 'wrap' in self.arguments.options:
                 # Choose a helper column to make the wrap more readable
                 if self.columnToSortBy:
                     # Look up the sorting column in the header by name. For this
