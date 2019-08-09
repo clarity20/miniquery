@@ -225,6 +225,7 @@ def doQuit(argv):
         if choice:
             ms.settings.filename = env.HOME + '/mini.rc'
             ms.settings.write()
+            return ReturnCode.USER_EXIT
         elif choice == None:
             return ReturnCode.SUCCESS
         elif choice == False:
@@ -244,6 +245,8 @@ def doSave(argv):
             ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
             ms.settings.write()
             settingsChanged = False
+    else:
+        print('No unsaved changes.')
     return
 
 def doHistory(argv):
@@ -265,9 +268,16 @@ def doMode(argv):
 
 def doOutput(argv):
     global settingsChanged
+    argc = len(argv)
 
-    # Select an output format
-    settingsChanged = True
+    # Select an output format: tab, nowrap, wrap, vertical
+    #TODO: Present options dialog if no arg is given
+    if argc >= 1:
+        if argv[0] in ['tab','wrap','nowrap','vertical']:
+            ms.settings['Settings']['output'] = argv[0]
+            settingsChanged = True
+        else:
+            print('Illegal option. Please choose tab, wrap, nowrap or beetical.')
     return
 
 def doSetTable(argv):
@@ -281,6 +291,7 @@ def doSetTable(argv):
 def doClearTable(argv):
     global settingsChanged
 
+    #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table']=''
     settingsChanged = True
     return
