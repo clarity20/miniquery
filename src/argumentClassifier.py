@@ -74,7 +74,7 @@ class argumentClassifier:
             else:
                 self.wheres.append(arg)
 
-        # Options coming from MINI_OPTIONS or the command line have precedence
+        # Options coming from the command line have precedence
         # over the program settings. Nonetheless, the latter should be included
         # in the final 'options' vector if there is nothing to override them.
         if not 'q' in self.options and not 'r' in self.options:
@@ -84,3 +84,7 @@ class argumentClassifier:
             if mode in ['run', 'both']:
                 self.options['r'] = True
 
+        if not ('tab' in self.options or 'vertical' in self.options
+                or 'wrap' in self.options or 'nowrap' in self.options):
+            mode = ms.settings['Settings']['output']
+            self.options[mode] = True

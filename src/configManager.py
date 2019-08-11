@@ -26,7 +26,7 @@ class ConfigManager:
 
     # member data
     def __init__(self):
-        self.config = {'standardColumns':''}  # dict of k-v pairs
+        self.config = {'standardColumns':'', 'primaryColumn':''}  # dict of k-v pairs
         self.masterTableNameList = []     # list of names
         self.masterColumnNameList = []    # list of tuples
 
