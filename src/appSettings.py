@@ -14,8 +14,8 @@ class appSettings():
         self.settings = None
 
     def loadSettings(self):
-        globalSettingsFile = os.path.join(env.MINI_CONFIG, '/mini.cfg')
-        userSettingsFile = os.path.join(env.HOME, '/.mini.rc')
+        globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
+        userSettingsFile = os.path.join(env.HOME, '.mini.rc')
         if not os.path.isfile(globalSettingsFile):
             return em.setError(ReturnCode.MISSING_SETTINGS_FILE, globalSettingsFile)
         self.settings = ConfigObj(globalSettingsFile)

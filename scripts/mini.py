@@ -220,10 +220,10 @@ def doQuit(argv):
 
     if settingsChanged:
         choice = button_dialog(title='Save before quitting?',
-                text='Save changes to your MINIQUERY settings before quitting?'
+                text='Save changes to your MINIQUERY settings before quitting?',
                 buttons=[('Yes',True), ('No',False), ('Cancel',None)])
         if choice:
-            ms.settings.filename = env.HOME + '/mini.rc'
+            ms.settings.filename = os.path.join(env.HOME, 'mini.rc')
             ms.settings.write()
             return ReturnCode.USER_EXIT
         elif choice == None:
@@ -322,7 +322,7 @@ def doSet(argv):
         varName = argv[0]
     elif argc == 1 and '=' in argv[0]:
         varName, eq, b = argv[0].partition('=')
-    for d in ms.settings['ConnectionString']:`
+    for d in ms.settings['ConnectionString']:
         if isinstance(d, dict) and varName in d:
             category = 'ConnectionString'
             subcategory = d
@@ -335,7 +335,7 @@ def doUnset(argv):
     #TODO:This might not work because settings are not flat like aliases and variables are
     category = 'Settings'
     subcategory = None
-    for d in ms.settings['ConnectionString']:`
+    for d in ms.settings['ConnectionString']:
         if isinstance(d, dict) and varName in d:
             category = 'ConnectionString'
             subcategory = d
