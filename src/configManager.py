@@ -7,6 +7,7 @@ from sqlalchemy.sql import text
 #import pysnooper
 
 import miniEnv as env
+from appSettings import miniSettings as ms
 from miniUtils import sqlTypeToInternalType
 from errorManager import miniErrorManager as em, ReturnCode
 from expanderEngine import miniExpanderEngine as exp
@@ -25,7 +26,7 @@ class ConfigManager:
 
     # member data
     def __init__(self):
-        self.config = {}                  # dict of k-v pairs
+        self.config = {'standardColumns':''}  # dict of k-v pairs
         self.masterTableNameList = []     # list of names
         self.masterColumnNameList = []    # list of tuples
 
@@ -84,10 +85,11 @@ class ConfigManager:
                                                 'information_schema.tables')):
             return em.returnCode
 
-        #MMMM: Activate this when the time comes:
+        #TODO: Activate this when the time comes:
 #        expander = exp.tableExpander
 #        tableList = expander.getExpandedNames(tableName)
-        tableName = 'table1'
+        #tableName = 'table1'
+        tableName = 'customers'
 #        tableName = expander.promptForExpansion(tableName, tableList)
 #
         if not self.loadColumnNameList("{}/{}/{}.columns".format(
@@ -129,19 +131,26 @@ class ConfigManager:
         regexMode = False
         regexCount = 0
 
-        with open(configFile, 'r') as configFp:
-            for line in configFp:
-                if not isInsideSection:
+        try:
+            with open(configFile, 'r') as configFp:
+                for line in configFp:
+
                     # Skip lines coming before the section of interest
-                    if line.lstrip().startswith(sectionHeader):
-                        isInsideSection = True
-                else:
+                    if not isInsideSection:
+                        if line.lstrip().startswith(sectionHeader):
+                            isInsideSection = True
+                        continue
+
+                    # Stop when the next section begins
                     line = line.strip()
                     if re.match(nextSectionRE, line):
                         break
+
+                    # Skip comments
                     elif line.startswith('#'):
                         continue
 
+                    # Require the format "attributeName=value"
                     attribute, equalsSign, value = line.partition('=')
                     if not equalsSign:
                         continue
@@ -174,7 +183,7 @@ class ConfigManager:
                         # any further attributes for this regex. If there are,
                         # they will compensate for this pre-incrementation.
                         regexCount += 1
- 
+
                     elif attribute == 'regex':
                         regexMode = True
                         regex = value
@@ -254,6 +263,9 @@ class ConfigManager:
                     else:
                         regexMode = self._acceptGenericConfig(attribute, value)
 
+        except FileNotFoundError:
+            print('Database config file "{}" not found. Using system defaults.'.format(configFile))
+
         self.config['regexCount'] = regexCount
 
         if 'mainTable' not in self.config.keys():
@@ -262,11 +274,11 @@ class ConfigManager:
         return ReturnCode.SUCCESS
 
     def _acceptGenericConfig(self, key, value):
-        # Substitute values for shell variables, if any
+        # Substitute values for variable names, if any
         if '$' in value:
             g = re.match('\$[A-Za-z_]+', value)
             variable = g.group(0)
-            value.replace(variable, os.environ[variable[1:]])
+            value.replace(variable, ms.settings['Settings'][variable[1:]])
 
         self.config[key] = value
         return False     # the new value of regexMode
