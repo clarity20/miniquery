@@ -1,10 +1,11 @@
 import os
 import sys
+import re
 from shlex import split
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
-from prompt_toolkit.shortcuts import yes_no_dialog
+from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog
 
 sys.path.append("../src/")
 
@@ -51,20 +52,13 @@ def main():
             cmd = sys.stdin.readline()
             if not cmd:
                 break
-            #TODO This handles queries only. We should also accept miniquery cmds:
-            #TODO look for the command prefix at cmd[0]
-            argv = split(cmd)
-            args.classify(argv)
+            retValue, oldTableName = dispatchCommand(cmd, oldTableName)
 
-            # Reconfigure if/when the table name changes
-            if args.mainTableName != oldTableName:
-                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
-                    em.doExit()
-                oldTableName = args.mainTableName
+            # Exit early if there is an incident
+            if retValue != ReturnCode.SUCCESS:
+                em.doExit()
 
-            # Finally:
-            queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
-
+        # Exit at EOF
         em.doExit()
 
     args.classify(sys.argv[1:])   # skip the program name
@@ -96,55 +90,13 @@ def main():
         try:
             cmd = session.prompt(MINI_PROMPT)
         except EOFError:
-            #TODO: Is cxn closed and is everything cleaned up?
             break
 
-        #TODO: Advise the user about special characters and escape sequences:
-        # Literal whitespace (space, tab, etc.) is interpreted as a delimiter
-        # unless quoted or \-escaped, which cause it to be embedded as-is.
-        # The escape sequences \t, \n, etc. are interpreted as delimiters
-        # unless quoted, in which case they are passed as raw character pairs.
-        # Otherwise, just about everything is passed raw, bypassing the usual
-        # actions of command-shell interpretation that require lots of extra
-        # protection or escaping. Be sure to tout the advantage this offers
-        # to REPL Miniquery over one-and-done Miniquery.
-        argv = split(cmd)
+        retValue, oldTableName = dispatchCommand(cmd, oldTableName)
+        if retValue == ReturnCode.USER_EXIT:
+            break
 
-        # Distinguish special commands from queries by looking for the command
-        # prefix (on cmd, not argv; when '\' is the prefix, split() strips it.)
-        if cmd.startswith(COMMAND_PREFIX):
-            # Call the function indicated by the first word
-            word = argv[0].lstrip(COMMAND_PREFIX).lower()
-            func = callbackMap[word]
-            result = func(argv[1:])
-            if result == ReturnCode.SUCCESS:
-                pass
-            elif result == ReturnCode.USER_EXIT:
-                break
-            elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
-                # Allow the user to fix the connection settings and keep going.
-                #TODO This requires the ability to change the settings. One sit8n
-                #TODO is a failed cxn due to bad cxn strings.
-                #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
-                em.doWarn()
-                continue
-        else:
-            args.classify(argv)
-
-            # Reconfigure if/when the table name changes
-            #TODO: Move this to the callback for table-name changing
-            if args.mainTableName != oldTableName:
-                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
-                    em.doExit()
-                oldTableName = args.mainTableName
-
-            if queryProcessor(argv).process() != ReturnCode.SUCCESS:
-                # Allow the user to fix the connection settings and keep going
-                #TODO Verify that changed environments are actually re-loaded
-                em.doWarn()
-                continue
-
-        # Skip what follows, come back to it later
+        # Experiment with autocompletion. Come back to this later.
         if False:
 
             # The table-name expander should look at argv[1]
@@ -174,6 +126,73 @@ def main():
     em.doExit()
 
 
+def dispatchCommand(cmd, oldTableName):
+
+    #TODO: Advise the user about special characters and escape sequences:
+    # Literal whitespace (space, tab, etc.) is interpreted as a delimiter
+    # unless quoted or \-escaped, which cause it to be embedded as-is.
+    # The escape sequences \t, \n, etc. are interpreted as delimiters
+    # unless quoted, in which case they are passed as raw character pairs.
+    # Otherwise, just about everything is passed raw, bypassing the usual
+    # actions of command-shell interpretation that require lots of extra
+    # protection or escaping. Be sure to tout the advantage this offers
+    # to REPL Miniquery over one-and-done Miniquery.
+    argv = split(cmd)
+
+    # Distinguish special commands from queries by looking for the command
+    # prefix (on cmd, not argv; when '\' is the prefix, split() strips it.)
+    if cmd.startswith(COMMAND_PREFIX):
+        word = argv[0].lstrip(COMMAND_PREFIX).lower()
+
+        # Unravel an alias of the command name, if there is one
+        try:
+            word = ms.settings['Aliases'][word]
+        except KeyError:
+            pass
+
+        # Substitute values in place of MINIQUERY variables
+        variable = re.search(r'\$(\w+)', cmd)
+        while variable:
+            varName = variable.group(1)
+            try:
+                cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
+            except KeyError:
+                print('Unknown variable "' + varName + '"')
+            variable = re.search(r'\$(\w+)', cmd)
+
+        # Call the function indicated by the first word
+        func = callbackMap[word]
+        result = func(argv[1:])
+        if result == ReturnCode.SUCCESS:
+            return ReturnCode.SUCCESS, oldTableName
+        elif result == ReturnCode.USER_EXIT:
+            return ReturnCode.USER_EXIT, oldTableName
+        elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
+            # Allow the user to fix the connection settings and keep going.
+            #TODO This requires the ability to change the settings. One sit8n
+            #TODO is a failed cxn due to bad cxn strings.
+            #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
+            em.doWarn()
+            return ReturnCode.SUCCESS, oldTableName
+        else:
+            args.classify(argv)
+
+            # Reconfigure if/when the table name changes
+            #TODO: Move this to the callback for table-name changing
+            if args.mainTableName != oldTableName:
+                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                    em.doExit()
+                oldTableName = args.mainTableName
+
+            retValue = queryProcessor(argv).process()
+            if retValue != ReturnCode.SUCCESS:
+                # Allow the user to fix the connection settings and keep going
+                #TODO Verify that changed environments are actually re-loaded
+                em.doWarn()
+                return retValue, oldTableName
+
+    return ReturnCode.SUCCESS, oldTableName
+
 def doHelp(argv):
     if not argv:
         print('\nMINIQUERY COMMANDS:\n')
@@ -184,8 +203,7 @@ def doHelp(argv):
   *h{elp} <command>   : Detailed help for a command\n\
   *hi{story} <count>  : Display command history\n\
   *t{able} <name>     : Set the default table name\n\
-  *clear <name>       : Clear the default table name\n\
-  *ct <name>          : Clear the default table name\n\
+  *cl{ear} <name>     : Clear the default table name\n\
   *d{rop}             : Drop a stashed command\n\
   *l{ist}             : List the stashed commands\n\
   *o{utput}           : Select an output format\n\
@@ -197,7 +215,7 @@ def doHelp(argv):
   *stash              : Stash and suspend the current command\n\
   *un{alias} <name>   : Undefine a command alias\n\
   *uns{et}            : Unset a MINIQUERY setting\n\
-  *v{ariable} <name>=<val> : Set/inspect a variable\n\
+  *{set}v <name>=<val>     : Set/inspect a variable\n\
   *. <file>           : Read and execute commands from a file'
 
 #TODO: Add these
@@ -208,7 +226,7 @@ def doHelp(argv):
     else:
         #TODO print('FUTURE: command-specific help')
         pass
-    return
+    return ReturnCode.SUCCESS
 
 def doSql(sql):
     global args  # The classified args. Should they be adjustable in the :sq cmd?
@@ -247,7 +265,7 @@ def doSave(argv):
             settingsChanged = False
     else:
         print('No unsaved changes.')
-    return
+    return ReturnCode.SUCCESS
 
 def doHistory(argv):
     global historyObject
@@ -257,28 +275,46 @@ def doHistory(argv):
     available = len(l)
     requested = int(argv[0] if argc > 0 else ms.settings['Settings']['historyLength'])
     print("\n".join(l[0:min(available, requested)]))
-    return
+    return ReturnCode.SUCCESS
 
 def doMode(argv):
     global settingsChanged
 
     # Not yet implemented
-    settingsChanged = True
-    return
+    #settingsChanged = True
+    return ReturnCode.SUCCESS
 
 def doOutput(argv):
     global settingsChanged
     argc = len(argv)
 
     # Select an output format: tab, nowrap, wrap, vertical
-    #TODO: Present options dialog if no arg is given
     if argc >= 1:
         if argv[0] in ['tab','wrap','nowrap','vertical']:
             ms.settings['Settings']['output'] = argv[0]
             settingsChanged = True
         else:
-            print('Illegal option. Please choose tab, wrap, nowrap or beetical.')
-    return
+            print('Illegal option. Please choose tab, wrap, nowrap or vertical.')
+    else:
+        buttonList = [('tab',0), ('wrap',1), ('nowrap',2), ('vertical',3),('CANCEL', -1)]
+        choice = button_dialog(title='Result set formatting',
+                text='Please choose a display format for your query results:',
+                buttons=buttonList)
+        if choice >= 0:
+            ms.settings['Settings']['output'] = buttonList[choice][0]
+            settingsChanged = True
+    return ReturnCode.SUCCESS
+
+def doSetDatabase(argv):
+    global settingsChanged
+
+    #TODO: MAYBE allow for abbreviated db names by expanding here
+    ms.settings['Settings']['database'] = argv[0]
+    # Run a "use" query to make the change effective
+    queryProcessor(args).process("USE " + argv[0])
+    #TODO: Change the prompt
+    settingsChanged = True
+    return ReturnCode.SUCCESS
 
 def doSetTable(argv):
     global settingsChanged
@@ -286,15 +322,14 @@ def doSetTable(argv):
     #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table'] = argv[0]
     settingsChanged = True
-    return
+    return ReturnCode.SUCCESS
 
 def doClearTable(argv):
     global settingsChanged
 
-    #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table']=''
     settingsChanged = True
-    return
+    return ReturnCode.SUCCESS
 
 def doStash(argv):
     return
@@ -309,8 +344,27 @@ def doRestore(argv):
     return
 
 def doSource(argv):
+    print('Sourcing ' + argv[0])
+    argc = len(argv)
+
     # Source a command file, a lot like input redirection
-    return
+    #TODO: It might be hard since the toolkit doesn't have it, but consider a "file open" dialog
+    if argc < 1:
+        print('A filename is required.')
+        return
+
+    try:
+        with open(argv[0], 'r') as sourceFp:
+            oldTableName = ''
+            for line in sourceFp:
+                retValue, oldTableName = dispatchCommand(line, oldTableName)
+                if retValue != ReturnCode.SUCCESS: 
+                    em.doWarn()
+
+    except FileNotFoundError:
+        print('Unable to open file ' + argv[0])
+
+    return ReturnCode.SUCCESS
 
 def doSet(argv):
     #TODO:This might not work because settings are not flat like aliases and variables are
@@ -328,8 +382,13 @@ def doSet(argv):
             subcategory = d
             break
 
-    _setValueCommand(argv, 'settingName', 'value', category, 'choice of setting', subcategory)
-    return
+    _setValueCommand("set", argv, 'settingName', 'value', category, 'your preferred setting', subcategory)
+    if argc == 0:
+        # Add explanatory note
+        print('First form sets a program setting')
+        print('Second form inquires as to a setting')
+
+    return ReturnCode.SUCCESS
 
 def doUnset(argv):
     #TODO:This might not work because settings are not flat like aliases and variables are
@@ -341,26 +400,26 @@ def doUnset(argv):
             subcategory = d
             break
 
-    _unsetValueCommand(argv, 'settingName', category, subcategory)
-    return
+    _unsetValueCommand("unset", argv, 'settingName', category, subcategory)
+    return ReturnCode.SUCCESS
 
 def doAlias(argv):
-    _setValueCommand(argv, 'alias', 'command', 'Aliases', 'a native command')
-    return
+    _setValueCommand("alias", argv, 'alias', 'command', 'Aliases', 'a native command')
+    return ReturnCode.SUCCESS
 
 def doUnalias(argv):
-    _unsetValueCommand(argv, 'aliasName', 'Aliases')
-    return
+    _unsetValueCommand("unalias", argv, 'aliasName', 'Aliases')
+    return ReturnCode.SUCCESS
 
 def doSetVariable(argv):
-    _setValueCommand(argv, 'name', 'value', 'Variables', 'text to be substituted')
-    return
+    _setValueCommand("setv", argv, 'name', 'value', 'Variables', 'text to be substituted')
+    return ReturnCode.SUCCESS
 
 def doUnsetVariable(argv):
-    _unsetValueCommand(argv, 'variable', 'Variables')
-    return
+    _unsetValueCommand("unsetv", argv, 'variable', 'Variables')
+    return ReturnCode.SUCCESS
 
-def _setValueCommand(argv, lhs, rhs, category, desc, subcategory=None):
+def _setValueCommand(command, argv, lhs, rhs, category, desc, subcategory=None):
     global settingsChanged
     argc = len(argv)
     #TODO: handle subcategoried values
@@ -368,7 +427,7 @@ def _setValueCommand(argv, lhs, rhs, category, desc, subcategory=None):
     # Set or query a MINIQUERY system value, depending on argc
     if argc == 0:
         print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}>'.format(
-            argv[0], lhs, rhs))
+            command, lhs, rhs))
         print('    where <{}> is {}'.format(rhs, desc))
     elif argc == 1:
         # Value assignment
@@ -392,12 +451,12 @@ def _setValueCommand(argv, lhs, rhs, category, desc, subcategory=None):
         settingsChanged = True
     return ReturnCode.SUCCESS
 
-def _unsetValueCommand(argv, objName, category):
+def _unsetValueCommand(command, argv, objName, category):
     global settingsChanged
 
     argc = len(argv)
     if argc != 2:
-        print('USAGE: {} <{}>'.format(argv[0], objName))
+        print('USAGE: {} <{}>'.format(command, objName))
         return
     else:
         if category == 'Settings':
@@ -435,10 +494,10 @@ callbackMap = {
         'v'      : doSetVariable,
         'setv'   : doSetVariable,
         'unsetv' : doUnsetVariable,
+        'db'     : doSetDatabase,
         'table'  : doSetTable,
         't'      : doSetTable,
-        'clear'  : doClearTable,
-        'ct'     : doClearTable,
+        'cl{ear}': doClearTable,
         'stash'  : doStash,
         'l'      : doList,
         'list'   : doList,
