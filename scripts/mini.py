@@ -20,6 +20,7 @@ from databaseConnection import miniDbConnection as dbConn
 
 #TODO Some of these settings should be made configurable
 MINI_PROMPT='mini>> '   #TODO Try 'curDB.curTable >> '
+MINI_PROMPT_PS2='   --> '
 COMMAND_PREFIX='\\'   # another popular one is ':'
 
 args = argumentClassifier()
@@ -77,7 +78,7 @@ def main():
             em.doExit()
         queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
 
-    # Pseudo-infinite event loop
+    # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
     print('Copyright (c) 2019 Miniquery\n')
     print('Enter {}h or {}help for help.\n'.format(COMMAND_PREFIX, COMMAND_PREFIX))
@@ -85,10 +86,36 @@ def main():
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
     oldTableName = ''
+    currentPrompt = MINI_PROMPT
+    cmdBuffer = []
+    # Cache a few dictionary lookups which should not change very often:
+    continuer = ms.settings['Settings']['continuer']
+    delimiter = ms.settings['Settings']['delimiter']
+    endlineProtocol = ms.settings['Settings']['endlineProtocol']
+
+    # The infinite event loop: Accept and dispatch MINIQUERY commands
     while 1:
-        # Accept normal MINIQUERY input. Break it down into arguments correctly.
+
+        # The command buffering loop: buffer command pieces according to
+        # the line protocol in force until they are ready for dispatch
         try:
-            cmd = session.prompt(MINI_PROMPT)
+            while 1:
+                cmd = session.prompt(currentPrompt)
+                if cmd.endswith(continuer) or endlineProtocol == 'continue':
+                    if cmd.endswith(continuer):
+                        cmd = cmd.rstrip(continuer)
+                    cmdBuffer.append(cmd)
+                    currentPrompt = MINI_PROMPT_PS2
+                elif cmd.endswith(delimiter) or endlineProtocol == 'delimit':
+                    if cmd.endswith(delimiter):
+                        cmd = cmd.rstrip(delimiter)
+                    if cmdBuffer:
+                        cmdBuffer.append(cmd)
+                        cmd = ' '.join(cmdBuffer)
+                        cmdBuffer.clear()
+                    currentPrompt = MINI_PROMPT
+                    # The command is complete and ready for dispatch
+                    break
         except EOFError:
             break
 
@@ -151,6 +178,7 @@ def dispatchCommand(cmd, oldTableName):
             pass
 
         # Substitute values in place of MINIQUERY variables
+        varName = ''
         variable = re.search(r'\$(\w+)', cmd)
         while variable:
             varName = variable.group(1)
@@ -159,9 +187,15 @@ def dispatchCommand(cmd, oldTableName):
             except KeyError:
                 print('Unknown variable "' + varName + '"')
             variable = re.search(r'\$(\w+)', cmd)
+        if varName:
+            argv = split(cmd)
 
         # Call the function indicated by the first word
-        func = callbackMap[word]
+        try:
+            func = callbackMap[word]
+        except KeyError:
+            print('Unknown command "'+ word + '"')
+            return ReturnCode.SUCCESS, oldTableName
         result = func(argv[1:])
         if result == ReturnCode.SUCCESS:
             return ReturnCode.SUCCESS, oldTableName
@@ -175,21 +209,39 @@ def dispatchCommand(cmd, oldTableName):
             em.doWarn()
             return ReturnCode.SUCCESS, oldTableName
         else:
-            args.classify(argv)
+            print('Unrecognized return code for command "' + cmd + '"')
+            return ReturnCode.SUCCESS, oldTableName
 
-            # Reconfigure if/when the table name changes
-            #TODO: Move this to the callback for table-name changing
-            if args.mainTableName != oldTableName:
-                if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
-                    em.doExit()
-                oldTableName = args.mainTableName
+    # It's a query, not a command
+    else:
+        # Substitute for variables as above
+        varName = ''
+        variable = re.search(r'\$(\w+)', cmd)
+        while variable:
+            varName = variable.group(1)
+            try:
+                cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
+            except KeyError:
+                print('Unknown variable "' + varName + '"')
+            variable = re.search(r'\$(\w+)', cmd)
+        if varName:
+            argv = split(cmd)
 
-            retValue = queryProcessor(argv).process()
-            if retValue != ReturnCode.SUCCESS:
-                # Allow the user to fix the connection settings and keep going
-                #TODO Verify that changed environments are actually re-loaded
-                em.doWarn()
-                return retValue, oldTableName
+        args.classify(argv)
+
+        # Reconfigure if/when the table name changes
+        #TODO: Move this to the callback for table-name changing
+        if args.mainTableName != oldTableName:
+            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                em.doExit()
+            oldTableName = args.mainTableName
+
+        retValue = queryProcessor(argv).process()
+        if retValue != ReturnCode.SUCCESS:
+            # Allow the user to fix the connection settings and keep going
+            #TODO Verify that changed environments are actually re-loaded
+            em.doWarn()
+            return retValue, oldTableName
 
     return ReturnCode.SUCCESS, oldTableName
 
@@ -288,22 +340,48 @@ def doOutput(argv):
     global settingsChanged
     argc = len(argv)
 
-    # Select an output format: tab, nowrap, wrap, vertical
-    if argc >= 1:
-        if argv[0] in ['tab','wrap','nowrap','vertical']:
-            ms.settings['Settings']['output'] = argv[0]
+    settingsChanged =_chooseFromList(['tab','wrap','nowrap','vertical'],
+            'Settings', 'output',
+            'Result set formatting',
+            'Please choose a display format for your query results:',
+            userEntry=argv[0] if argc >= 1 else None)
+    return ReturnCode.SUCCESS
+
+# General function to accept a choice of setting when there are just a few
+# valid options. Accepts a typed-in value, but if none is provided brings up
+# a selection dialog
+def _chooseFromList(lst, category, setting, title, text, userEntry='',
+            subcategory=None, canCancel=True):
+
+    if userEntry:
+        if userEntry in lst:
+            if subcategory:
+                ms.settings[category][subcategory][setting] = userEntry
+            else:
+                ms.settings[category][setting] = userEntry
             settingsChanged = True
         else:
-            print('Illegal option. Please choose tab, wrap, nowrap or vertical.')
+            #TODO: Before assuming a user error, offer pop-up autocompletion from the list provided
+            length = len(lst)
+            if length >= 3:
+                csv = ' or '.join(lst).replace(' or ', ', ', length-2) \
+                        if length >= 3 else ' or '.join(lst)
+            print('Illegal option "{}". Please choose one of {}'. format(
+                userChoice, csv))
     else:
-        buttonList = [('tab',0), ('wrap',1), ('nowrap',2), ('vertical',3),('CANCEL', -1)]
-        choice = button_dialog(title='Result set formatting',
-                text='Please choose a display format for your query results:',
-                buttons=buttonList)
+        #TODO: In LOUD mode, offer a dialog. In SOFT mode, offer autocompletion
+        # Button list must be a list of pair-tuples: (name, return value)
+        buttonList = list(zip( lst+['CANCEL'], list(range(len(lst)))+[-1] ) \
+                if canCancel else zip(lst, range(len(lst))))
+        choice = button_dialog(title=title, text=text, buttons=buttonList)
         if choice >= 0:
-            ms.settings['Settings']['output'] = buttonList[choice][0]
+            if subcategory:
+                ms.settings[category][subcategory][setting] = list(buttonList)[choice][0]
+            else:
+                ms.settings[category][setting] = list(buttonList)[choice][0]
             settingsChanged = True
-    return ReturnCode.SUCCESS
+
+    return settingsChanged
 
 def doSetDatabase(argv):
     global settingsChanged
@@ -321,6 +399,7 @@ def doSetTable(argv):
 
     #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table'] = argv[0]
+    #TODO: Change the prompt
     settingsChanged = True
     return ReturnCode.SUCCESS
 
@@ -344,15 +423,15 @@ def doRestore(argv):
     return
 
 def doSource(argv):
-    print('Sourcing ' + argv[0])
     argc = len(argv)
 
     # Source a command file, a lot like input redirection
-    #TODO: It might be hard since the toolkit doesn't have it, but consider a "file open" dialog
+    #TODO: Consider a "file open" dialog, but it might be hard since the toolkit doesn't have one
     if argc < 1:
         print('A filename is required.')
         return
 
+    print('Sourcing ' + argv[0])
     try:
         with open(argv[0], 'r') as sourceFp:
             oldTableName = ''
@@ -367,7 +446,6 @@ def doSource(argv):
     return ReturnCode.SUCCESS
 
 def doSet(argv):
-    #TODO:This might not work because settings are not flat like aliases and variables are
     argc = len(argv)
     category = 'Settings'
     subcategory = None
@@ -391,7 +469,6 @@ def doSet(argv):
     return ReturnCode.SUCCESS
 
 def doUnset(argv):
-    #TODO:This might not work because settings are not flat like aliases and variables are
     category = 'Settings'
     subcategory = None
     for d in ms.settings['ConnectionString']:
@@ -422,7 +499,6 @@ def doUnsetVariable(argv):
 def _setValueCommand(command, argv, lhs, rhs, category, desc, subcategory=None):
     global settingsChanged
     argc = len(argv)
-    #TODO: handle subcategoried values
 
     # Set or query a MINIQUERY system value, depending on argc
     if argc == 0:
