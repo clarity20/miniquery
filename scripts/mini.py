@@ -156,27 +156,23 @@ def main():
 
 def dispatchCommand(cmd, oldTableName):
 
-    #TODO: Advise the user about special characters and escape sequences:
-    # Literal whitespace (space, tab, etc.) is interpreted as a delimiter
-    # unless quoted or \-escaped, which cause it to be embedded as-is.
-    # The escape sequences \t, \n, etc. are interpreted as delimiters
-    # unless quoted, in which case they are passed as raw character pairs.
-    # Otherwise, just about everything is passed raw, bypassing the usual
-    # actions of command-shell interpretation that require lots of extra
-    # protection or escaping. Be sure to tout the advantage this offers
-    # to REPL Miniquery over one-and-done Miniquery.
-    argv = split(cmd)
-
-    # Distinguish special commands from queries by looking for the command
-    # prefix (on cmd, not argv; when '\' is the prefix, split() strips it.)
+    # Distinguish commands from queries by looking for the command prefix
     if cmd.startswith(COMMAND_PREFIX):
-        word = argv[0].lstrip(COMMAND_PREFIX).lower()
+        cmd = cmd.lstrip(COMMAND_PREFIX)
 
-        # Unravel an alias of the command name, if there is one
-        try:
-            word = ms.settings['Aliases'][word]
-        except KeyError:
-            pass
+        # Resolve command aliases
+        for a in ms.settings['Aliases']:
+            # We have an alias when the cmd "starts with" an alias.
+            # We have to recognize false "aliases" that are
+            # simply proper substrings of a longer command name
+            if cmd.startswith(a):
+                try:
+                    isAlias = not cmd[len(a)].isalnum()
+                except IndexError:
+                    isAlias = True
+                if isAlias:
+                    cmd = cmd.replace(a, ms.settings['Aliases'][a], 1)
+                    break
 
         # Substitute values in place of MINIQUERY variables
         varName = ''
@@ -188,10 +184,11 @@ def dispatchCommand(cmd, oldTableName):
             except KeyError:
                 print('Unknown variable "' + varName + '"')
             variable = re.search(r'\$(\w+)', cmd)
-        if varName:
-            argv = split(cmd)
+
+        argv = split(cmd)
 
         # Call the function indicated by the first word
+        word = argv[0].lower()
         try:
             func = callbackMap[word]
         except KeyError:
@@ -215,6 +212,8 @@ def dispatchCommand(cmd, oldTableName):
 
     # It's a query, not a command
     else:
+
+        argv.split(cmd)
 
         # Substitute for variables as above
         varName = ''
