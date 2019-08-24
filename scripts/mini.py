@@ -19,7 +19,7 @@ from queryProcessor import queryProcessor
 from databaseConnection import miniDbConnection as dbConn
 
 #TODO Some of these settings should be made configurable
-MINI_PROMPT='mini>> '   #TODO Try 'curDB.curTable >> '
+MINI_PROMPT='\nmini>> '   #TODO Try 'curDB.curTable >> '
 MINI_PROMPT_PS2='   --> '
 COMMAND_PREFIX='\\'   # another popular one is ':'
 
@@ -81,7 +81,7 @@ def main():
     # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
     print('Copyright (c) 2019 Miniquery\n')
-    print('Enter {}h or {}help for help.\n'.format(COMMAND_PREFIX, COMMAND_PREFIX))
+    print('Enter {}help for help.\n'.format(COMMAND_PREFIX, COMMAND_PREFIX))
     histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
@@ -96,26 +96,27 @@ def main():
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while 1:
 
-        # The command buffering loop: buffer command pieces according to
-        # the line protocol in force until they are ready for dispatch
+        # The command buffering loop: buffer command fragments according to
+        # the line protocol until a complete command is detected
         try:
             while 1:
                 cmd = session.prompt(currentPrompt)
-                if cmd.endswith(continuer) or endlineProtocol == 'continue':
-                    if cmd.endswith(continuer):
-                        cmd = cmd.rstrip(continuer)
-                    cmdBuffer.append(cmd)
-                    currentPrompt = MINI_PROMPT_PS2
-                elif cmd.endswith(delimiter) or endlineProtocol == 'delimit':
-                    if cmd.endswith(delimiter):
-                        cmd = cmd.rstrip(delimiter)
-                    if cmdBuffer:
-                        cmdBuffer.append(cmd)
-                        cmd = ' '.join(cmdBuffer)
-                        cmdBuffer.clear()
+
+                # Is end-of-command detected?
+                isDelimited = cmd.endswith(delimiter)
+                if isDelimited or (
+                        not cmd.endswith(continuer) and endlineProtocol == 'delimit'):
+                    cmdBuffer.append(cmd.rstrip(delimiter))
+                    cmd = ' '.join(cmdBuffer)
+                    cmdBuffer.clear()
                     currentPrompt = MINI_PROMPT
                     # The command is complete and ready for dispatch
                     break
+
+                # Command continuation is indicated
+                else:
+                    cmdBuffer.append(cmd.rstrip(continuer))
+                    currentPrompt = MINI_PROMPT_PS2
         except EOFError:
             break
 
@@ -214,6 +215,7 @@ def dispatchCommand(cmd, oldTableName):
 
     # It's a query, not a command
     else:
+
         # Substitute for variables as above
         varName = ''
         variable = re.search(r'\$(\w+)', cmd)
@@ -249,30 +251,29 @@ def doHelp(argv):
     if not argv:
         print('\nMINIQUERY COMMANDS:\n')
 
-        helpText = '  *al{ias} <new> <old>: Define an alias for a command\n\
-  *s{ave}             : Save MINIQUERY user settings\n\
-  *exit, *q{uit}      : Exit MINIQUERY\n\
-  *h{elp} <command>   : Detailed help for a command\n\
-  *hi{story} <count>  : Display command history\n\
-  *t{able} <name>     : Set the default table name\n\
-  *cl{ear} <name>     : Clear the default table name\n\
-  *d{rop}             : Drop a stashed command\n\
-  *l{ist}             : List the stashed commands\n\
-  *o{utput}           : Select an output format\n\
-  *r{estore}          : Restore a stashed command\n\
-  *st{ate}            : Summarize Miniquery state: settings & vars\n\
-  *set <name>=<value> : Set/inspect a MINIQUERY program setting\n\
+        helpText = '\
   *sq <query>         : Execute a literal SQL statement\n\
+  *quit             : Exit MINIQUERY\n\
+  *help <command>   : Detailed help for a command\n\
+  *history <count>  : Display command history\n\
+  *table <name>     : Set the default table name\n\
+  *clear <name>     : Clear the default table name\n\
+  *format           : Select an output format\n\
+  *set <name>=<value> : Set/inspect a MINIQUERY program setting\n\
+    or *set <name> <value>\n\
+  *seta <new> <old>: Define an alias for a command\n\
+  *setv <name>=<val>  : Set/inspect a macro variable\n\
+  *save             : Save MINIQUERY user settings\n\
   *source <file>      : Read and execute commands from a file\n\
-  *stash              : Stash and suspend the current command\n\
-  *un{alias} <name>   : Undefine a command alias\n\
-  *uns{et}            : Unset a MINIQUERY setting\n\
-  *{set}v <name>=<val>     : Set/inspect a variable\n\
-  *. <file>           : Read and execute commands from a file'
+  *unalias <name>   : Undefine a command alias\n\
+  *unset            : Unset a MINIQUERY setting\n\
+  *unseta           : Unset an alias \n\
+  *unsetv           : Unset a macro variable'
 
 #TODO: Add these
 #*m{ode}             : Select a SQL subfamily mode\n\
 #*ab{brev}           : Define an object-name abbreviation\n\
+#TODO: Add a list of TOPICS such as the prompt and how to write MINI-queries
 
         print(helpText.replace('*', COMMAND_PREFIX))
     else:
@@ -282,7 +283,6 @@ def doHelp(argv):
 
 def doSql(sql):
     global args  # The classified args. Should they be adjustable in the :sq cmd?
-    #TODO: Make variable substitutions in the literal sql
     return queryProcessor(args).process(" ".join(sql))
 
 def doQuit(argv):
@@ -293,7 +293,7 @@ def doQuit(argv):
                 text='Save changes to your MINIQUERY settings before quitting?',
                 buttons=[('Yes',True), ('No',False), ('Cancel',None)])
         if choice:
-            ms.settings.filename = os.path.join(env.HOME, 'mini.rc')
+            ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
             ms.settings.write()
             return ReturnCode.USER_EXIT
         elif choice == None:
@@ -336,21 +336,19 @@ def doMode(argv):
     #settingsChanged = True
     return ReturnCode.SUCCESS
 
-def doOutput(argv):
+def doFormat(argv):
     global settingsChanged
     argc = len(argv)
 
-    settingsChanged =_chooseFromList(['tab','wrap','nowrap','vertical'],
-            'Settings', 'output',
-            'Result set formatting',
-            'Please choose a display format for your query results:',
-            userEntry=argv[0] if argc >= 1 else None)
+    optionsTuple = settingOptionsMap['format']
+    _chooseValueFromList(optionsTuple[0], 'Settings', 'format',
+                optionsTuple[1], optionsTuple[2],
+                userEntry=argv[0] if argc >= 1 else None)
     return ReturnCode.SUCCESS
 
-# General function to accept a choice of setting when there are just a few
-# valid options. Accepts a typed-in value, but if none is provided brings up
-# a selection dialog
-def _chooseFromList(lst, category, setting, title, text, userEntry='',
+# Function that accepts a value from a small set of valid options.
+# Accepts a typed-in value, but if none is provided brings up a selection dialog
+def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
             subcategory=None, canCancel=True):
 
     if userEntry:
@@ -376,15 +374,16 @@ def _chooseFromList(lst, category, setting, title, text, userEntry='',
         choice = button_dialog(title=title, text=text, buttons=buttonList)
         if choice >= 0:
             if subcategory:
-                ms.settings[category][subcategory][setting] = list(buttonList)[choice][0]
+                ms.settings[category][subcategory][setting] = buttonList[choice][0]
             else:
-                ms.settings[category][setting] = list(buttonList)[choice][0]
+                ms.settings[category][setting] = buttonList[choice][0]
             settingsChanged = True
 
     return settingsChanged
 
 def doSetDatabase(argv):
     global settingsChanged
+    global args
 
     #TODO: MAYBE allow for abbreviated db names by expanding here
     ms.settings['Settings']['database'] = argv[0]
@@ -410,18 +409,6 @@ def doClearTable(argv):
     settingsChanged = True
     return ReturnCode.SUCCESS
 
-def doStash(argv):
-    return
-
-def doList(argv):
-    return
-
-def doDrop(argv):
-    return
-
-def doRestore(argv):
-    return
-
 def doSource(argv):
     argc = len(argv)
 
@@ -439,64 +426,192 @@ def doSource(argv):
                 retValue, oldTableName = dispatchCommand(line, oldTableName)
                 if retValue != ReturnCode.SUCCESS: 
                     em.doWarn()
-
     except FileNotFoundError:
         print('Unable to open file ' + argv[0])
 
     return ReturnCode.SUCCESS
 
+
+# Constants for interactive selection of finite-option settings:
+# 3-tuples containing option list, dialog title, and dialog text
+settingOptionsMap = {
+    'format'   : (['tab','wrap','nowrap','vertical'],
+                    'Result set formatting',
+                    'Please choose a display format for query results:'),
+    'endlineProtocol' : (['delimit','continue'],
+                    'Endline interpretation protocol',
+                    'Please choose a protocol for interpreting lines of query text:'),
+    'runMode'  : (['query','run','both'],
+                    'MINIQUERY run mode',
+                    'Choose whether to show the generated queries, to run them, or to do both:')
+    }
+
 def doSet(argv):
     argc = len(argv)
-    category = 'Settings'
+    category = None
     subcategory = None
+    value = None
+    settingName = None
 
     if argc == 2:
-        varName = argv[0]
-    elif argc == 1 and '=' in argv[0]:
-        varName, eq, b = argv[0].partition('=')
-    for d in ms.settings['ConnectionString']:
-        if isinstance(d, dict) and varName in d:
-            category = 'ConnectionString'
-            subcategory = d
-            break
-
-    _setValueCommand("set", argv, 'settingName', 'value', category, 'your preferred setting', subcategory)
-    if argc == 0:
-        # Add explanatory note
+        settingName = argv[0]
+        value = argv[1]
+    elif argc == 1:
+        if '=' in argv[0]:
+            settingName, eq, value = argv[0].partition('=')
+        else:
+            settingName = argv[0]
+    elif argc == 0:
+        # Provide USAGE help.
+        #TODO: Put the code here, don't make a subfunction call
+        _setArbitraryValue("set", argv, 'settingName', 'value',
+                category, 'your preferred setting', subcategory)
+        # Add an explanatory note
         print('First form sets a program setting')
-        print('Second form inquires as to a setting')
+        print('Second form inquires as to a setting\'s value')
+        return ReturnCode.SUCCESS
+
+    # Locate the setting in the internal configuration data structure
+    if settingName in ms.settings['Settings']:
+        category = 'Settings'
+    else:
+        for d in ms.settings['ConnectionString']:
+            if isinstance(d, dict) and settingName in d:
+                category = 'ConnectionString'
+                subcategory = d
+                break
+        if not category:
+            print('Invalid setting name "' + settingName + '".')
+            return ReturnCode.SUCCESS
+
+    # Certain settable variables are restricted to a small set of values.
+    # Others may assume unlimited values, practically speaking.
+    # We have special functions to manage both cases.
+    try:
+        optionsTuple = settingOptionsMap[settingName]
+        _chooseValueFromList(optionsTuple[0], category, settingName,
+                optionsTuple[1], optionsTuple[2], userEntry=value)
+    except KeyError:
+        _setArbitraryValue("set", argv, 'settingName', 'value',
+                category, 'your preferred setting', subcategory)
+        if argc == 0:
+            # Add explanatory note
+            print('First form sets a program setting')
+            print('Second form inquires as to a setting\'s value')
+
+    return ReturnCode.SUCCESS
+
+def doGet(argv):
+    argc = len(argv)
+    if argc < 1:
+        print('USAGE: get <setting>')
+        print('Displays the value of a setting.')
+        print('Use "get *" to see all settings.')
+    else:
+        settingName = argv[0]
+        if settingName == '*':
+            for s in ms.settings['Settings'].items():
+                print(s[0] + ': ' + s[1])
+            print()
+            for s in ms.settings['ConnectionString'].items():
+                if isinstance(s[1], dict):
+                    for s1 in s[1].items():
+                        print(s1[0] + ': ' + s1[1])
+                else:
+                    print(s[0] + ': ' + s[1])
+        elif settingName in ms.settings['Settings']:
+            print(settingName + ': ' + ms.settings['Settings'][settingName])
+        else:
+            found = False
+            for s in ms.settings['ConnectionString']:
+                if isinstance(s, dict) and settingName in s:
+                    print(settingName + ': ' + ms.settings['ConnectionString'][s][settingName])
+                    found = True
+                    break
+            if not found:
+                print('Error: Setting ' + settingName + ' not found.')
+
+    return ReturnCode.SUCCESS
+
+def doGetAlias(argv):
+    argc = len(argv)
+    if argc < 1:
+        print('USAGE: geta <aliasName>')
+        print('Displays the meaning of an alias.')
+        print('Use "geta *" to see all aliases.')
+    else:
+        aliasName = argv[0]
+        if aliasName == '*':
+            for a in ms.settings['Aliases'].items():
+                print(a[0] + ': ' + a[1])
+        elif aliasName in ms.settings['Aliases']:
+            print(aliasName + ': ' + ms.settings['Aliases'][aliasName])
+        else:
+            print('Error: Alias ' + aliasName + ' not found.')
+
+    return ReturnCode.SUCCESS
+
+def doGetVariable(argv):
+    argc = len(argv)
+    if argc < 1:
+        print('USAGE: getv <variableName>')
+        print('Displays the value of a MINIQUERY variable.')
+        print('Use "getv *" to see all variables.')
+    else:
+        varName = argv[0]
+        if varName == '*':
+            for v in ms.settings['Variables'].items():
+                print(v[0] + ': ' + v[1])
+        elif varName in ms.settings['Variables']:
+            print(varName + ': ' + ms.settings['Variables'][varName])
+        else:
+            print('Error: Variable ' + varName + ' not found.')
 
     return ReturnCode.SUCCESS
 
 def doUnset(argv):
+    argc = len(argv)
     category = 'Settings'
     subcategory = None
-    for d in ms.settings['ConnectionString']:
-        if isinstance(d, dict) and varName in d:
-            category = 'ConnectionString'
-            subcategory = d
-            break
+
+    if argc >= 1:
+        settingName = argv[0]
+
+    if not settingName in ms.settings['Settings']:
+        for d in ms.settings['ConnectionString']:
+            if isinstance(d, dict) and settingName in d:
+                category = 'ConnectionString'
+                subcategory = d
+                break
 
     _unsetValueCommand("unset", argv, 'settingName', category, subcategory)
     return ReturnCode.SUCCESS
 
 def doAlias(argv):
-    _setValueCommand("alias", argv, 'alias', 'command', 'Aliases', 'a native command')
+    _setArbitraryValue("seta", argv, 'alias', 'command', 'Aliases', 'a native command')
     return ReturnCode.SUCCESS
 
 def doUnalias(argv):
-    _unsetValueCommand("unalias", argv, 'aliasName', 'Aliases')
+    _unsetValueCommand("unseta", argv, 'aliasName', 'Aliases')
     return ReturnCode.SUCCESS
 
 def doSetVariable(argv):
-    _setValueCommand("setv", argv, 'name', 'value', 'Variables', 'text to be substituted')
+    _setArbitraryValue("setv", argv, 'name', 'value', 'Variables', 'text to be substituted')
     return ReturnCode.SUCCESS
 
 def doUnsetVariable(argv):
     _unsetValueCommand("unsetv", argv, 'variable', 'Variables')
     return ReturnCode.SUCCESS
 
-def _setValueCommand(command, argv, lhs, rhs, category, desc, subcategory=None):
+
+# Function to set or query a MINIQUERY system setting when an "infinitude"
+# of values are allowed. The user-proposed value is NOT validated -- anything
+# For finite value sets, _chooseValueFromList() is the way to go.
+#
+# N.B.: This function doubles as a setter for "user customizations" that are not
+# "settings," per se: aliases, variables and abbreviations. The distinction is
+# noted in the "command" argument.
+def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None):
     global settingsChanged
     argc = len(argv)
 
@@ -546,40 +661,26 @@ def _unsetValueCommand(command, argv, objName, category):
         return
 
 callbackMap = {
-        'h'      : doHelp,
         'help'   : doHelp,
         'sq'     : doSql,
-        'q'      : doQuit,
         'quit'   : doQuit,
-        'exit'   : doQuit,
         'history': doHistory,
-        'hi'     : doHistory,
-        'm'      : doMode,
         'mode'   : doMode,
-        'o'      : doOutput,
-        'output' : doOutput,
-        's'      : doSave,
+        'format' : doFormat,
         'save'   : doSave,
         'set'    : doSet,
+        'get'    : doGet,
         'unset'  : doUnset,
-        'uns'    : doUnset,
-        'alias'  : doAlias,
-        'al'     : doAlias,
-        'unalias': doUnalias,
-        'un'     : doUnalias,
-        'v'      : doSetVariable,
+        'seta'   : doAlias,
+        'geta'   : doGetAlias,
+        'unseta' : doUnalias,
         'setv'   : doSetVariable,
+        'getv'   : doGetVariable,
         'unsetv' : doUnsetVariable,
         'db'     : doSetDatabase,
         'table'  : doSetTable,
-        't'      : doSetTable,
-        'cl{ear}': doClearTable,
-        'stash'  : doStash,
-        'l'      : doList,
-        'list'   : doList,
-        'restore': doRestore,
+        'clear'  : doClearTable,
         'source' : doSource,
-        '.'      : doSource
         }
 
 # Main entry point.
