@@ -86,5 +86,5 @@ class argumentClassifier:
 
         if not ('tab' in self.options or 'vertical' in self.options
                 or 'wrap' in self.options or 'nowrap' in self.options):
-            mode = ms.settings['Settings']['output']
+            mode = ms.settings['Settings']['format']
             self.options[mode] = True
