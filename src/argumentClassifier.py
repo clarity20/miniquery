@@ -74,17 +74,22 @@ class argumentClassifier:
             else:
                 self.wheres.append(arg)
 
-        # Options coming from the command line have precedence
-        # over the program settings. Nonetheless, the latter should be included
-        # in the final 'options' vector if there is nothing to override them.
-        if not 'q' in self.options and not 'r' in self.options:
+        # Fall back on the program settings when certain important options
+        # are not set on the command line
+        self.backfillOptions()
+
+    # Options coming from the command line have precedence over the program
+    # settings. But we need to incorporate the latter in the final
+    # 'options' vector if no option has been explicitly set.
+    def backfillOptions(self):
+        if {'q','r'}.isdisjoint(set(self.options.keys())):
             mode = ms.settings['Settings']['runMode']
             if mode in ['query', 'both']:
                 self.options['q'] = True
             if mode in ['run', 'both']:
                 self.options['r'] = True
 
-        if not ('tab' in self.options or 'vertical' in self.options
-                or 'wrap' in self.options or 'nowrap' in self.options):
+        if {'tab','vertical','wrap','nowrap'}.isdisjoint(set(self.options.keys())):
             mode = ms.settings['Settings']['format']
             self.options[mode] = True
+

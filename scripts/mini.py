@@ -25,6 +25,7 @@ COMMAND_PREFIX='\\'   # another popular one is ':'
 
 args = argumentClassifier()
 settingsChanged = False
+continuer = ''; delimiter = ''; endlineProtocol = None
 
 #TODO non-writeable hist file gives an error!
 historyObject = None
@@ -32,6 +33,7 @@ historyObject = None
 def main():
     global args
     global historyObject
+    global continuer, delimiter, endlineProtocol
 
     if '-h' in sys.argv or '--help' in sys.argv:
         giveMiniHelp()
@@ -81,7 +83,7 @@ def main():
     # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
     print('Copyright (c) 2019 Miniquery\n')
-    print('Enter {}help for help.\n'.format(COMMAND_PREFIX, COMMAND_PREFIX))
+    print('Enter {}help for help.'.format(COMMAND_PREFIX, COMMAND_PREFIX))
     histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
@@ -212,7 +214,6 @@ def dispatchCommand(cmd, oldTableName):
 
     # It's a query, not a command
     else:
-
         argv.split(cmd)
 
         # Substitute for variables as above
@@ -252,22 +253,24 @@ def doHelp(argv):
 
         helpText = '\
   *sq <query>         : Execute a literal SQL statement\n\
-  *quit             : Exit MINIQUERY\n\
-  *help <command>   : Detailed help for a command\n\
-  *history <count>  : Display command history\n\
-  *table <name>     : Set the default table name\n\
-  *clear <name>     : Clear the default table name\n\
-  *format           : Select an output format\n\
-  *set <name>=<value> : Set/inspect a MINIQUERY program setting\n\
-    or *set <name> <value>\n\
-  *seta <new> <old>: Define an alias for a command\n\
-  *setv <name>=<val>  : Set/inspect a macro variable\n\
-  *save             : Save MINIQUERY user settings\n\
+  *quit               : Exit MINIQUERY\n\
+  *help <command>     : Detailed help for a command\n\
+  *history <count>    : Display command history\n\
+  *table <name>       : Set the default table name\n\
+  *clear <name>       : Clear the default table name\n\
+  *format             : Select an output format\n\
+  *set <name>=<value> : Set a MINIQUERY program setting\n\
+  *seta <new>=<old>   : Set up an alias for a command\n\
+  *setv <name>=<val>  : Set a macro variable\n\
+  *get                : Inspect a setting value\n\
+  *geta               : Inspect a setting value\n\
+  *getv               : Inspect a setting value\n\
+  *save               : Save MINIQUERY user settings\n\
   *source <file>      : Read and execute commands from a file\n\
-  *unalias <name>   : Undefine a command alias\n\
-  *unset            : Unset a MINIQUERY setting\n\
-  *unseta           : Unset an alias \n\
-  *unsetv           : Unset a macro variable'
+  *unalias <name>     : Undefine a command alias\n\
+  *unset              : Unset a MINIQUERY setting\n\
+  *unseta             : Unset an alias \n\
+  *unsetv             : Unset a macro variable'
 
 #TODO: Add these
 #*m{ode}             : Select a SQL subfamily mode\n\
@@ -281,7 +284,13 @@ def doHelp(argv):
     return ReturnCode.SUCCESS
 
 def doSql(sql):
-    global args  # The classified args. Should they be adjustable in the :sq cmd?
+    # Most of the classified args should not apply here. The purpose of "sq"
+    # is to allow literal SQL exactly as-is, i.e. no alterations. But we still
+    # need to fall back on the program settings: runMode, display format, ...
+    # So here we clear the options, copy the settings, and then run the query.
+    global args
+    args.options.clear()
+    args.backfillOptions()
     return queryProcessor(args).process(" ".join(sql))
 
 def doQuit(argv):
@@ -344,41 +353,6 @@ def doFormat(argv):
                 optionsTuple[1], optionsTuple[2],
                 userEntry=argv[0] if argc >= 1 else None)
     return ReturnCode.SUCCESS
-
-# Function that accepts a value from a small set of valid options.
-# Accepts a typed-in value, but if none is provided brings up a selection dialog
-def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
-            subcategory=None, canCancel=True):
-
-    if userEntry:
-        if userEntry in lst:
-            if subcategory:
-                ms.settings[category][subcategory][setting] = userEntry
-            else:
-                ms.settings[category][setting] = userEntry
-            settingsChanged = True
-        else:
-            #TODO: Before assuming a user error, offer pop-up autocompletion from the list provided
-            length = len(lst)
-            if length >= 3:
-                csv = ' or '.join(lst).replace(' or ', ', ', length-2) \
-                        if length >= 3 else ' or '.join(lst)
-            print('Illegal option "{}". Please choose one of {}'. format(
-                userChoice, csv))
-    else:
-        #TODO: In LOUD mode, offer a dialog. In SOFT mode, offer autocompletion
-        # Button list must be a list of pair-tuples: (name, return value)
-        buttonList = list(zip( lst+['CANCEL'], list(range(len(lst)))+[-1] ) \
-                if canCancel else zip(lst, range(len(lst))))
-        choice = button_dialog(title=title, text=text, buttons=buttonList)
-        if choice >= 0:
-            if subcategory:
-                ms.settings[category][subcategory][setting] = buttonList[choice][0]
-            else:
-                ms.settings[category][setting] = buttonList[choice][0]
-            settingsChanged = True
-
-    return settingsChanged
 
 def doSetDatabase(argv):
     global settingsChanged
@@ -465,9 +439,6 @@ def doSet(argv):
         #TODO: Put the code here, don't make a subfunction call
         _setArbitraryValue("set", argv, 'settingName', 'value',
                 category, 'your preferred setting', subcategory)
-        # Add an explanatory note
-        print('First form sets a program setting')
-        print('Second form inquires as to a setting\'s value')
         return ReturnCode.SUCCESS
 
     # Locate the setting in the internal configuration data structure
@@ -493,10 +464,6 @@ def doSet(argv):
     except KeyError:
         _setArbitraryValue("set", argv, 'settingName', 'value',
                 category, 'your preferred setting', subcategory)
-        if argc == 0:
-            # Add explanatory note
-            print('First form sets a program setting')
-            print('Second form inquires as to a setting\'s value')
 
     return ReturnCode.SUCCESS
 
@@ -603,6 +570,49 @@ def doUnsetVariable(argv):
     return ReturnCode.SUCCESS
 
 
+# Function that accepts a value from a small set of valid options.
+# Accepts a typed-in value, but if none is provided brings up a selection dialog
+def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
+            subcategory=None, canCancel=True):
+    global endlineProtocol
+
+    if userEntry:
+        if userEntry in lst:
+            if subcategory:
+                ms.settings[category][subcategory][setting] = userEntry
+            else:
+                ms.settings[category][setting] = userEntry
+                # Update cached local copies of settings
+                if setting == 'endlineProtocol':
+                    endlineProtocol = userEntry
+            settingsChanged = True
+        else:
+            #TODO: Before assuming a user error, offer pop-up autocompletion from the list provided
+            length = len(lst)
+            if length >= 3:
+                csv = ' or '.join(lst).replace(' or ', ', ', length-2) \
+                        if length >= 3 else ' or '.join(lst)
+            print('Illegal option "{}". Please choose one of {}'. format(
+                userChoice, csv))
+    else:
+        #TODO: In LOUD mode, offer a dialog. In SOFT mode, offer autocompletion
+        # Button list must be a list of pair-tuples: (name, return value)
+        buttonList = list(zip( lst+['CANCEL'], list(range(len(lst)))+[-1] ) \
+                if canCancel else zip(lst, range(len(lst))))
+        choice = button_dialog(title=title, text=text, buttons=buttonList)
+        if choice >= 0:
+            if subcategory:
+                ms.settings[category][subcategory][setting] = buttonList[choice][0]
+            else:
+                ms.settings[category][setting] = buttonList[choice][0]
+                # Update cached local copies of settings
+                if setting == 'endlineProtocol':
+                    endlineProtocol = buttonList[choice][0]
+            settingsChanged = True
+
+    return settingsChanged
+
+
 # Function to set or query a MINIQUERY system setting when an "infinitude"
 # of values are allowed. The user-proposed value is NOT validated -- anything
 # For finite value sets, _chooseValueFromList() is the way to go.
@@ -611,33 +621,35 @@ def doUnsetVariable(argv):
 # "settings," per se: aliases, variables and abbreviations. The distinction is
 # noted in the "command" argument.
 def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None):
-    global settingsChanged
+    global settingsChanged, continuer, delimiter
     argc = len(argv)
 
     # Set or query a MINIQUERY system value, depending on argc
     if argc == 0:
-        print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}>'.format(
+        print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}> <{2}>'.format(
             command, lhs, rhs))
         print('    where <{}> is {}'.format(rhs, desc))
-    elif argc == 1:
-        # Value assignment
-        if '=' in argv[0]:
-            var, eq, val = argv[0].partition('=')
-            if subcategory:
-                ms.settings[category][subcategory][var] = val
-            else:
-                ms.settings[category][var] = val
-            settingsChanged = True
-        # Value inquiry
-        elif argv[0] in ms.settings[category]:
-            print('{}: {}'.format(argv[0], ms.settings[category][argv[0]]))
-        else:
-            print('{} is not defined.'.format(argv[0]))
-    elif argc == 2:
+    elif argc == 1 and '=' in argv[0]: # Value assignment
+        var, eq, val = argv[0].partition('=')
         if subcategory:
-            ms.settings[category][subcategory][argv[0]] = argv[1]
+            ms.settings[category][subcategory][var] = val
         else:
-            ms.settings[category][argv[0]] = argv[1]
+            ms.settings[category][var] = val
+            if var == 'continuer':
+                continuer = val
+            elif var == 'delimiter':
+                delimiter = val
+        settingsChanged = True
+    elif argc == 2:
+        var = argv[0]
+        if subcategory:
+            ms.settings[category][subcategory][var] = argv[1]
+        else:
+            ms.settings[category][var] = argv[1]
+            if var == 'continuer':
+                continuer = val
+            elif var == 'delimiter':
+                delimiter = val
         settingsChanged = True
     return ReturnCode.SUCCESS
 
