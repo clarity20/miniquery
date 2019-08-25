@@ -21,7 +21,6 @@ from databaseConnection import miniDbConnection as dbConn
 #TODO Some of these settings should be made configurable
 MINI_PROMPT='\nmini>> '   #TODO Try 'curDB.curTable >> '
 MINI_PROMPT_PS2='   --> '
-COMMAND_PREFIX='\\'   # another popular one is ':'
 
 args = argumentClassifier()
 settingsChanged = False
@@ -83,7 +82,7 @@ def main():
     # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
     print('Copyright (c) 2019 Miniquery\n')
-    print('Enter {}help for help.'.format(COMMAND_PREFIX, COMMAND_PREFIX))
+    print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
     histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
@@ -159,8 +158,8 @@ def main():
 def dispatchCommand(cmd, oldTableName):
 
     # Distinguish commands from queries by looking for the command prefix
-    if cmd.startswith(COMMAND_PREFIX):
-        cmd = cmd.lstrip(COMMAND_PREFIX)
+    if cmd.startswith(ms.settings['Settings']['leader']):
+        cmd = cmd.lstrip(ms.settings['Settings']['leader'])
 
         # Resolve command aliases
         for a in ms.settings['Aliases']:
@@ -197,6 +196,7 @@ def dispatchCommand(cmd, oldTableName):
             print('Unknown command "'+ word + '"')
             return ReturnCode.SUCCESS, oldTableName
         result = func(argv[1:])
+
         if result == ReturnCode.SUCCESS:
             return ReturnCode.SUCCESS, oldTableName
         elif result == ReturnCode.USER_EXIT:
@@ -214,7 +214,7 @@ def dispatchCommand(cmd, oldTableName):
 
     # It's a query, not a command
     else:
-        argv.split(cmd)
+        argv = split(cmd)
 
         # Substitute for variables as above
         varName = ''
@@ -277,7 +277,7 @@ def doHelp(argv):
 #*ab{brev}           : Define an object-name abbreviation\n\
 #TODO: Add a list of TOPICS such as the prompt and how to write MINI-queries
 
-        print(helpText.replace('*', COMMAND_PREFIX))
+        print(helpText.replace('*', ms.settings['Settings']['leader']))
     else:
         #TODO print('FUTURE: command-specific help')
         pass
@@ -397,7 +397,7 @@ def doSource(argv):
             oldTableName = ''
             for line in sourceFp:
                 retValue, oldTableName = dispatchCommand(line, oldTableName)
-                if retValue != ReturnCode.SUCCESS: 
+                if retValue != ReturnCode.SUCCESS:
                     em.doWarn()
     except FileNotFoundError:
         print('Unable to open file ' + argv[0])
