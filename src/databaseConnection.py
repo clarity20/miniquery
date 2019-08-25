@@ -2,6 +2,7 @@ import miniEnv as env
 from appSettings import miniSettings as ms
 from errorManager import miniErrorManager as em, ReturnCode
 from sqlalchemy import create_engine
+from prompt_toolkit import prompt
 
 # Database connection class. Should be used like a singleton.
 class databaseConnection():
@@ -57,8 +58,8 @@ class databaseConnection():
         userPart = ''
         if cxnSettings[defType]['MINI_USER']:
             if not cxnSettings[defType]['MINI_PASSWORD'] and not self._gotPassword:
-                from getpass import getpass
-                cxnSettings[defType]['MINI_PASSWORD'] = getpass('Please enter password: ')
+                cxnSettings[defType]['MINI_PASSWORD'] = prompt(
+                        message="Please enter password: ", is_password=True)
                 self._gotPassword = True  # Prevents repeated asks in a no-password situation
             userPart = '{}:{}'.format(cxnSettings[defType]['MINI_USER'],
                                     cxnSettings[defType]['MINI_PASSWORD'])
