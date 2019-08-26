@@ -32,14 +32,18 @@ class queryProcessor:
         return ret
 
     def inflateQuery(self):
-        self.query = "SELECT * from table1 LIMIT 4" #MMMM WHERE id >= 3"
+        self.query = "SELECT * from table1 LIMIT 4" #TODO MMMM WHERE id >= 3"
         self.queryType = QueryType.SELECT
 
     def runAndDisplayResult(self):
         conn = dbConn.getConnection()
         if em.getError() != ReturnCode.SUCCESS:
             return em.getError()
-        resultSet = conn.execute(text(self.query))
+        try:
+            resultSet = conn.execute(text(self.query))
+        except Exception as e:
+            return em.setError(ReturnCode.INVALID_QUERY_SYNTAX,
+                    type(e).__name__, e.args)
 
         # Displaying a result set only makes sense for SELECTs that found stg
         if self.queryType != QueryType.SELECT:

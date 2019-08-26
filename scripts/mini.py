@@ -5,7 +5,7 @@ from shlex import split
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
-from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog
+from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
 
 sys.path.append("../src/")
 
@@ -97,15 +97,15 @@ def main():
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while 1:
 
-        # The command buffering loop: buffer command fragments according to
-        # the line protocol until a complete command is detected
+        # The command buffering loop: Keep buffering command fragments
+        # according to the line protocol until a complete command is detected
         try:
             while 1:
-                cmd = session.prompt(currentPrompt)
+                cmd = session.prompt(currentPrompt, enable_open_in_editor=True,
+                        editing_mode=ms.settings['Settings']['editMode'])
 
                 # Is end-of-command detected?
-                isDelimited = cmd.endswith(delimiter)
-                if isDelimited or (
+                if cmd.endswith(delimiter) or (
                         not cmd.endswith(continuer) and endlineProtocol == 'delimit'):
                     cmdBuffer.append(cmd.rstrip(delimiter))
                     cmd = ' '.join(cmdBuffer)
@@ -258,10 +258,10 @@ def doHelp(argv):
   *history <count>    : Display command history\n\
   *table <name>       : Set the default table name\n\
   *clear <name>       : Clear the default table name\n\
-  *format             : Select an output format\n\
+  *format             : Select a format for query output\n\
   *set <name>=<value> : Set a MINIQUERY program setting\n\
-  *seta <new>=<old>   : Set up an alias for a command\n\
-  *setv <name>=<val>  : Set a macro variable\n\
+  *seta <alias>=<cmd> : Set up an alias for a command\n\
+  *setv <name>=<value>: Set a macro variable\n\
   *get                : Inspect a setting value\n\
   *geta               : Inspect a setting value\n\
   *getv               : Inspect a setting value\n\
@@ -276,6 +276,7 @@ def doHelp(argv):
 #*m{ode}             : Select a SQL subfamily mode\n\
 #*ab{brev}           : Define an object-name abbreviation\n\
 #TODO: Add a list of TOPICS such as the prompt and how to write MINI-queries
+#TODO: (Point the user to a tutorial)
 
         print(helpText.replace('*', ms.settings['Settings']['leader']))
     else:
@@ -291,7 +292,11 @@ def doSql(sql):
     global args
     args.options.clear()
     args.backfillOptions()
-    return queryProcessor(args).process(" ".join(sql))
+    retValue = queryProcessor(args).process(" ".join(sql))
+    if retValue != ReturnCode.SUCCESS:
+        em.doWarn()
+        return ReturnCode.SUCCESS  #TODO: Keep the "real" error code, here and elsewhere
+    return ReturnCode.SUCCESS
 
 def doQuit(argv):
     global settingsChanged
@@ -416,7 +421,10 @@ settingOptionsMap = {
                     'Please choose a protocol for interpreting lines of query text:'),
     'runMode'  : (['query','run','both'],
                     'MINIQUERY run mode',
-                    'Choose whether to show the generated queries, to run them, or to do both:')
+                    'Choose whether to show the generated queries, to run them, or to do both:'),
+    'editMode' : (['VI', 'EMACS'],
+        'Command editing mode',
+        'Choose vi- or emacs-style command editing:'),
     }
 
 def doSet(argv):
@@ -574,7 +582,7 @@ def doUnsetVariable(argv):
 # Accepts a typed-in value, but if none is provided brings up a selection dialog
 def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
             subcategory=None, canCancel=True):
-    global endlineProtocol
+    global endlineProtocol, settingsChanged
 
     if userEntry:
         if userEntry in lst:
@@ -610,12 +618,12 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                     endlineProtocol = buttonList[choice][0]
             settingsChanged = True
 
-    return settingsChanged
+    return ReturnCode.SUCCESS
 
 
 # Function to set or query a MINIQUERY system setting when an "infinitude"
 # of values are allowed. The user-proposed value is NOT validated -- anything
-# For finite value sets, _chooseValueFromList() is the way to go.
+# goes. For finite value sets, _chooseValueFromList() is the way to go.
 #
 # N.B.: This function doubles as a setter for "user customizations" that are not
 # "settings," per se: aliases, variables and abbreviations. The distinction is
@@ -624,28 +632,41 @@ def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None
     global settingsChanged, continuer, delimiter
     argc = len(argv)
 
-    # Set or query a MINIQUERY system value, depending on argc
     if argc == 0:
         print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}> <{2}>'.format(
             command, lhs, rhs))
         print('    where <{}> is {}'.format(rhs, desc))
-    elif argc == 1 and '=' in argv[0]: # Value assignment
-        var, eq, val = argv[0].partition('=')
+    elif argc == 1:
+        if '=' in argv[0]:
+            # Value assignment from the cmd line
+            var, eq, val = argv[0].partition('=')
+            if subcategory:
+                ms.settings[category][subcategory][var] = val
+            else:
+                ms.settings[category][var] = val
+                if var == 'continuer':
+                    continuer = val
+                elif var == 'delimiter':
+                    delimiter = val
+        else:
+            # Value assignment from dialog box
+            var = argv[0]
+            val = input_dialog(title='Set value',
+                        text='Please enter a value for ' + var + ':')
+            if not val:
+                # Cancelled! Return without doing anything.
+                return ReturnCode.SUCCESS
+            elif subcategory:
+                ms.settings[category][subcategory][var] = val
+            else:
+                ms.settings[category][var] = val
+        settingsChanged = True
+    elif argc == 2:
+        var = argv[0]; val = argv[1]
         if subcategory:
             ms.settings[category][subcategory][var] = val
         else:
             ms.settings[category][var] = val
-            if var == 'continuer':
-                continuer = val
-            elif var == 'delimiter':
-                delimiter = val
-        settingsChanged = True
-    elif argc == 2:
-        var = argv[0]
-        if subcategory:
-            ms.settings[category][subcategory][var] = argv[1]
-        else:
-            ms.settings[category][var] = argv[1]
             if var == 'continuer':
                 continuer = val
             elif var == 'delimiter':

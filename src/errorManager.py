@@ -15,6 +15,7 @@ class ReturnCode(Enum):
     USER_EXIT = 10
     DATABASE_CONNECTION_ERROR = 11
     MISSING_SETTINGS_FILE = 12
+    INVALID_QUERY_SYNTAX = 13
 
 errorMsgDict = {
     0 : '',
@@ -30,6 +31,7 @@ errorMsgDict = {
     10 : 'Filler error message not to be returned by the program.',
     11 : 'Database connection error: {0}, {1}',
     12 : 'Application settings file "{0}" missing or unreadable.',
+    13 : 'Query syntax error: {0}, {1}',
     }
 
 class ErrorManager:
