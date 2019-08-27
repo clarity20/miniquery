@@ -19,6 +19,7 @@ class queryProcessor:
         ret = ReturnCode.SUCCESS
         if sql:
             self.query = sql
+            self.queryType = QueryType.SELECT
         else:
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
@@ -52,25 +53,27 @@ class queryProcessor:
             return em.setError(ReturnCode.EMPTY_RESULT_SET)
 
         columnHdrs = resultSet.keys()
+        columnCount = len(columnHdrs)
         if 'tab' in self.arguments.options:
             print(*columnHdrs, sep='\t')
+            format = '\t'.join(['%s']*columnCount)
             while True:
                 # don't use too much memory
                 rows = resultSet.fetchmany()
                 if not rows:
                     break
                 for row in rows:
-                    print(*row, sep='\t')
+#                    print('\t'.join([v or 'NULL' for v in row.values()]))
+                    print(format % tuple(v or 'NULL' for v in row.values()))
             return ReturnCode.SUCCESS
         else:
             types = resultSet._cursor_description()
-            columnCount = len(types)
             columnWidths = [max(types[i][2], len(columnHdrs[i])) # [2] = display_size
                             for i in range(columnCount)]
 
             if 'vertical' in self.arguments.options:
                 nameWidth = max([len(columnHdrs[i]) for i in range(columnCount)])
-                # Format is "column name : value" repeated over the columns.
+                # Format is "column header : value" repeated over the columns.
                 # In the next line we precompute the format pieces and concat.
                 format = '\n'.join(['{0:>{width}}: %s'.
                             format(h, width=nameWidth) for h in columnHdrs])
@@ -84,7 +87,7 @@ class queryProcessor:
                         # all to mimic mysql's behavior
                         print('{0:*^62}'.format(' %d. row ' % count))
                         # The data: write the values into the prepared format
-                        print(format % tuple(row.values()))
+                        print(format % tuple(v or 'NULL' for v in row.values()))
                         count += 1
 
                 return ReturnCode.SUCCESS
@@ -107,7 +110,7 @@ class queryProcessor:
                 result = [format % tuple(columnHdrs)]
                 result.append('')
                 for row in rows:
-                    result.append(format % tuple([x or 'NULL' for x in row.values()]))
+                    result.append(format % tuple([v or 'NULL' for v in row.values()]))
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
             elif 'wrap' in self.arguments.options:
