@@ -1,7 +1,7 @@
 import os
 from sys import exit
 
-from errorManager import ReturnCode
+from errorManager import miniErrorManager as em, ReturnCode
 
 # Declare the environment (for export)
 HOME = ''
@@ -33,6 +33,11 @@ def setEnv():
         MINI_CONFIG = os.path.join(MINI_HOME, 'config')
 
     MINI_OPTIONS = _readOptionalVariable('MINI_OPTIONS')
+
+    try:
+        os.environ['EDITOR']   # Make sure it is set, but don't need the value
+    except KeyError:
+        em.doWarn('NOTE: Please set the EDITOR environment variable to your editor of choice for best results.')
 
     return ReturnCode.SUCCESS
 
