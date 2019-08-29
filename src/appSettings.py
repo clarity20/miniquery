@@ -14,14 +14,18 @@ class appSettings():
         self.settings = None
 
     def loadSettings(self):
-        globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
+        # Load the settings from the user-specific file if it is available.
         userSettingsFile = os.path.join(env.HOME, '.mini.rc')
+        if os.path.isfile(userSettingsFile):
+            self.settings = ConfigObj(userSettingsFile)
+            return ReturnCode.SUCCESS
+
+        # Fall back on the global settings only if the user's are unavailable.
+        globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
         if not os.path.isfile(globalSettingsFile):
             return em.setError(ReturnCode.MISSING_SETTINGS_FILE, globalSettingsFile)
         self.settings = ConfigObj(globalSettingsFile)
-        if os.path.isfile(userSettingsFile):
-            userSettings = ConfigObj(userSettingsFile)
-            self.settings.merge(userSettings)
+        #self.settings.merge(userSettings)
         return ReturnCode.SUCCESS
 
 # Instantiate a global object that can be made visible everywhere with
