@@ -19,7 +19,10 @@ class queryProcessor:
         ret = ReturnCode.SUCCESS
         if sql:
             self.query = sql
-            self.queryType = QueryType.SELECT
+            if sql[:7].lower() == 'select ':
+                self.queryType = QueryType.SELECT
+            else
+                self.queryType = QueryType.UPDATE
         else:
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
@@ -63,7 +66,6 @@ class queryProcessor:
                 if not rows:
                     break
                 for row in rows:
-#                    print('\t'.join([v or 'NULL' for v in row.values()]))
                     print(format % tuple(v or 'NULL' for v in row.values()))
             return ReturnCode.SUCCESS
         else:
