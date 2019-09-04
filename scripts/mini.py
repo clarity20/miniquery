@@ -6,6 +6,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
+from prompt_toolkit.styles import Style
 
 sys.path.append("../src/")
 
@@ -17,20 +18,35 @@ from configManager import miniConfigManager as cfg
 from argumentClassifier import argumentClassifier
 from queryProcessor import queryProcessor
 from databaseConnection import miniDbConnection as dbConn
+from prompts import stringToPrompt
 
-#TODO Some of these settings should be made configurable
-MINI_PROMPT='\nmini>> '   #TODO Try 'curDB.curTable >> '
-MINI_PROMPT_PS2='   --> '
-
-args = argumentClassifier()
+setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
+args = argumentClassifier()
 
 #TODO non-writeable hist file gives an error!
 historyObject = None
 
+# Constants for interactive selection of finite-option settings:
+# 3-tuples containing option list, dialog title, and dialog text
+settingOptionsMap = {
+    'format'   : (['tab','wrap','nowrap','vertical'],
+                    'Result set formatting',
+                    'Please choose a display format for query results:'),
+    'endlineProtocol' : (['delimit','continue'],
+                    'Endline interpretation protocol',
+                    'Please choose a protocol for interpreting lines of query text:'),
+    'runMode'  : (['query','run','both'],
+                    'MINIQUERY run mode',
+                    'Choose whether to show the generated queries, to run them, or to do both:'),
+    'editMode' : (['VI', 'EMACS'],
+        'Command editing mode',
+        'Choose vi- or emacs-style command editing:'),
+    }
+
 def main():
-    global args
+    global args, setupPrompt
     global historyObject
     global continuer, delimiter, endlineProtocol
 
@@ -81,13 +97,13 @@ def main():
 
     # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
-    print('Copyright (c) 2019 Miniquery\n')
+    print('Copyright (c) 2019 Miniquery AMDG, LLC\n')
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
-    histFileName = '{}/mini.hst'.format(env.MINI_CONFIG)
+    histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
     oldTableName = ''
-    currentPrompt = MINI_PROMPT
+
     cmdBuffer = []
     # Cache a few dictionary lookups which should not change very often:
     continuer = ms.settings['Settings']['continuer']
@@ -97,11 +113,18 @@ def main():
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while 1:
 
+        if setupPrompt:    # Initialize or update the prompt
+            PS1Prompt, styleDict = stringToPrompt(ms.settings['Settings']['prompt'])
+            PS2Prompt = [('class:symbol', ms.settings['Settings']['secondarySymbol'])]
+            promptStyle = Style.from_dict(styleDict)
+            usePS1Prompt = True; setupPrompt = False
+
         # The command buffering loop: Keep buffering command fragments
-        # according to the line protocol until a complete command is detected
+        # according to the line protocol until a complete command is received
         try:
             while 1:
-                cmd = session.prompt(currentPrompt, enable_open_in_editor=True,
+                cmd = session.prompt(PS1Prompt if usePS1Prompt else PS2Prompt,
+                        style=promptStyle, enable_open_in_editor=True,
                         editing_mode=ms.settings['Settings']['editMode'])
 
                 # Is end-of-command detected?
@@ -110,14 +133,14 @@ def main():
                     cmdBuffer.append(cmd.rstrip(delimiter))
                     cmd = ' '.join(cmdBuffer)
                     cmdBuffer.clear()
-                    currentPrompt = MINI_PROMPT
+                    usePS1Prompt = True
                     # The command is complete and ready for dispatch
                     break
 
                 # Command continuation is indicated
                 else:
                     cmdBuffer.append(cmd.rstrip(continuer))
-                    currentPrompt = MINI_PROMPT_PS2
+                    usePS1Prompt = False
         except EOFError:
             break
 
@@ -191,11 +214,11 @@ def dispatchCommand(cmd, oldTableName):
         # Call the function indicated by the first word
         word = argv[0].lower()
         try:
-            func = callbackMap[word]
+            callback = callbackMap[word]
         except KeyError:
             print('Unknown command "'+ word + '"')
             return ReturnCode.SUCCESS, oldTableName
-        result = func(argv[1:])
+        result = callback(argv[1:])
 
         if result == ReturnCode.SUCCESS:
             return ReturnCode.SUCCESS, oldTableName
@@ -270,7 +293,7 @@ def doHelp(argv):
   *unalias <name>     : Undefine a command alias\n\
   *unset              : Unset a MINIQUERY setting\n\
   *unseta             : Unset an alias \n\
-  *unsetv             : Unset a macro variable'
+  *unsetv             : Unset a macro variable\n'
 
 #TODO: Add these
 #*m{ode}             : Select a SQL subfamily mode\n\
@@ -289,13 +312,22 @@ def doSql(sql):
     # is to allow literal SQL exactly as-is, i.e. no alterations. But we still
     # need to fall back on the program settings: runMode, display format, ...
     # So here we clear the options, copy the settings, and then run the query.
-    global args
+    global args, setupPrompt
     args.options.clear()
     args.backfillOptions()
-    retValue = queryProcessor(args).process(" ".join(sql))
+    fullSql = " ".join(sql)
+    retValue = queryProcessor(args).process(fullSql)
     if retValue != ReturnCode.SUCCESS:
         em.doWarn()
         return ReturnCode.SUCCESS  #TODO: Keep the "real" error code, here and elsewhere
+
+    # Detect "use" queries (database-switching)
+    if fullSql[:4].lower() == "use ":
+        ms.settings['Settings']['database'] = fullSql[4:]
+        ms.settings['Settings']['table'] = ''
+        # Update the prompt
+        setupPrompt = True
+
     return ReturnCode.SUCCESS
 
 def doQuit(argv):
@@ -308,15 +340,15 @@ def doQuit(argv):
         if choice:
             ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
             ms.settings.write()
-            return ReturnCode.USER_EXIT
+            return em.setError(ReturnCode.USER_EXIT)
         elif choice == None:
             return ReturnCode.SUCCESS
         elif choice == False:
-            return ReturnCode.USER_EXIT
+            return em.setError(ReturnCode.USER_EXIT)
     else:
         if yes_no_dialog(title='Quit MINIQUERY',
                 text='Exit MINIQUERY: Are you sure?'):
-            return ReturnCode.USER_EXIT
+            return em.setError(ReturnCode.USER_EXIT)
 
 def doSave(argv):
     global settingsChanged
@@ -343,14 +375,11 @@ def doHistory(argv):
     return ReturnCode.SUCCESS
 
 def doMode(argv):
-    global settingsChanged
-
     # Not yet implemented
     #settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doFormat(argv):
-    global settingsChanged
     argc = len(argv)
 
     optionsTuple = settingOptionsMap['format']
@@ -360,30 +389,33 @@ def doFormat(argv):
     return ReturnCode.SUCCESS
 
 def doSetDatabase(argv):
-    global settingsChanged
-    global args
+    global args, setupPrompt, settingsChanged
 
     #TODO: MAYBE allow for abbreviated db names by expanding here
     ms.settings['Settings']['database'] = argv[0]
+    ms.settings['Settings']['table'] = ''
     # Run a "use" query to make the change effective
+    #TODO: Does this work ONLY for MYSQL, or for all RDBMS?
     queryProcessor(args).process("USE " + argv[0])
-    #TODO: Change the prompt
+    # Update the prompt
+    setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doSetTable(argv):
-    global settingsChanged
+    global setupPrompt, settingsChanged
 
     #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table'] = argv[0]
-    #TODO: Change the prompt
+    setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doClearTable(argv):
-    global settingsChanged
+    global setupPrompt, settingsChanged
 
     ms.settings['Settings']['table']=''
+    setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS
 
@@ -408,24 +440,6 @@ def doSource(argv):
         print('Unable to open file ' + argv[0])
 
     return ReturnCode.SUCCESS
-
-
-# Constants for interactive selection of finite-option settings:
-# 3-tuples containing option list, dialog title, and dialog text
-settingOptionsMap = {
-    'format'   : (['tab','wrap','nowrap','vertical'],
-                    'Result set formatting',
-                    'Please choose a display format for query results:'),
-    'endlineProtocol' : (['delimit','continue'],
-                    'Endline interpretation protocol',
-                    'Please choose a protocol for interpreting lines of query text:'),
-    'runMode'  : (['query','run','both'],
-                    'MINIQUERY run mode',
-                    'Choose whether to show the generated queries, to run them, or to do both:'),
-    'editMode' : (['VI', 'EMACS'],
-        'Command editing mode',
-        'Choose vi- or emacs-style command editing:'),
-    }
 
 def doSet(argv):
     argc = len(argv)
@@ -685,35 +699,37 @@ def _unsetValueCommand(command, argv, objName, category):
         if category == 'Settings':
             # Settings cannot be *removed*
             print('Error: MINIQUERY system setting "' + objName
-                    + '" can only be changed, not unset.')
+                    + '" cannot be unset, only changed.')
             return
         else:
             del ms.settings[category][argv[0]]
             settingsChanged = True
         return
 
+# Fcn names cannot be used until the fns have been defined, so this is 
+# way down here
 callbackMap = {
-        'help'   : doHelp,
-        'sq'     : doSql,
-        'quit'   : doQuit,
-        'history': doHistory,
-        'mode'   : doMode,
-        'format' : doFormat,
-        'save'   : doSave,
-        'set'    : doSet,
-        'get'    : doGet,
-        'unset'  : doUnset,
-        'seta'   : doAlias,
-        'geta'   : doGetAlias,
-        'unseta' : doUnalias,
-        'setv'   : doSetVariable,
-        'getv'   : doGetVariable,
-        'unsetv' : doUnsetVariable,
-        'db'     : doSetDatabase,
-        'table'  : doSetTable,
-        'clear'  : doClearTable,
-        'source' : doSource,
-        }
+    'help'   : doHelp,
+    'sq'     : doSql,
+    'quit'   : doQuit,
+    'history': doHistory,
+    'mode'   : doMode,
+    'format' : doFormat,
+    'save'   : doSave,
+    'set'    : doSet,
+    'get'    : doGet,
+    'unset'  : doUnset,
+    'seta'   : doAlias,
+    'geta'   : doGetAlias,
+    'unseta' : doUnalias,
+    'setv'   : doSetVariable,
+    'getv'   : doGetVariable,
+    'unsetv' : doUnsetVariable,
+    'db'     : doSetDatabase,
+    'table'  : doSetTable,
+    'clear'  : doClearTable,
+    'source' : doSource,
+}
 
 # Main entry point.
 if __name__ == '__main__':
