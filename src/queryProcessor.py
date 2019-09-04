@@ -19,9 +19,16 @@ class queryProcessor:
         ret = ReturnCode.SUCCESS
         if sql:
             self.query = sql
+
+            # Turn off echoing of literal SQL
+            try:
+                del self.arguments.options['q']
+            except KeyError:
+                pass
+
             if sql[:7].lower() == 'select ':
                 self.queryType = QueryType.SELECT
-            else
+            else:
                 self.queryType = QueryType.UPDATE
         else:
             ret = self.inflateQuery()
