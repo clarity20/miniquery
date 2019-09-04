@@ -16,6 +16,7 @@ class ReturnCode(Enum):
     DATABASE_CONNECTION_ERROR = 11
     MISSING_SETTINGS_FILE = 12
     INVALID_QUERY_SYNTAX = 13
+    PROMPT_ERROR = 14
 
 errorMsgDict = {
     0 : '',
@@ -28,10 +29,11 @@ errorMsgDict = {
     7 : 'Cannot read {0} description file "{1}".',
     8 : 'Invalid date expression.',
     9 : 'Error: Unbalanced parentheses in argument {0}.',
-    10 : 'Filler error message not to be returned by the program.',
+    10 : '\nThank you for using MINIQUERY!\n',
     11 : 'Database connection error: {0}, {1}',
     12 : 'Application settings file "{0}" missing or unreadable.',
     13 : 'Query syntax error: {0}, {1}',
+    14 : 'Illegal {0} "{1}" in prompt.',
     }
 
 class ErrorManager:
@@ -63,7 +65,8 @@ class ErrorManager:
 
     def doExit(self, msg=None):
         print(msg if msg else self.errMsg, file=self.errOutputStream)
-        sys.exit(self.returnCode.value)
+        sys.exit(0 if self.returnCode == ReturnCode.USER_EXIT
+                   else self.returnCode.value)
 
     # Warn: For situations that warrant giving the user a chance to
     # fix things up instead of totally exiting the program
