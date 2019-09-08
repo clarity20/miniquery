@@ -11,14 +11,14 @@ from prompt_toolkit.styles import Style
 sys.path.append("../src/")
 
 import miniEnv as env
-from miniHelp import giveMiniHelp
-from appSettings import miniSettings as ms
-from errorManager import miniErrorManager as em, ReturnCode
-from configManager import miniConfigManager as cfg
-from argumentClassifier import argumentClassifier
-from queryProcessor import queryProcessor
-from databaseConnection import miniDbConnection as dbConn
-from prompts import stringToPrompt
+from includes import giveMiniHelp
+from includes import miniSettings as ms
+from includes import miniErrorManager as em, ReturnCode
+from includes import miniConfigManager as cfg
+from includes import argumentClassifier
+from includes import queryProcessor
+from includes import miniDbConnection as dbConn
+from includes import stringToPrompt
 
 setupPrompt = True
 settingsChanged = False
@@ -615,7 +615,7 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                 csv = ' or '.join(lst).replace(' or ', ', ', length-2) \
                         if length >= 3 else ' or '.join(lst)
             print('Illegal option "{}". Please choose one of {}'. format(
-                userChoice, csv))
+                userEntry, csv))
     else:
         #TODO: In LOUD mode, offer a dialog. In SOFT mode, offer autocompletion
         # Button list must be a list of pair-tuples: (name, return value)
