@@ -3,9 +3,9 @@ import os
 from sqlalchemy.sql import text
 
 from miniUtils import QueryType
-from configManager import miniConfigManager as cfg
-from databaseConnection import miniDbConnection as dbConn
-from errorManager import miniErrorManager as em, ReturnCode
+from configManager import miniConfigManager; cfg = miniConfigManager
+from databaseConnection import miniDbConnection; dbConn = miniDbConnection
+from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 
 class queryProcessor:
 

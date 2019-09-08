@@ -1,6 +1,6 @@
 import miniEnv as env
-from appSettings import miniSettings as ms
-from errorManager import miniErrorManager as em, ReturnCode
+from appSettings import miniSettings; ms = miniSettings
+from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from sqlalchemy import create_engine
 from prompt_toolkit import prompt
 

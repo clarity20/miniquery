@@ -1,4 +1,4 @@
-import spellingExpander as sp
+import spellingExpander; sp = spellingExpander
 
 class TableNameExpander(sp.SpellingExpander):
 

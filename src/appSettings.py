@@ -1,6 +1,6 @@
 import os
 import miniEnv as env
-from errorManager import miniErrorManager as em, ReturnCode
+from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from configobj import ConfigObj
 
 # This class manages the Miniquery program "settings" (not to be confused

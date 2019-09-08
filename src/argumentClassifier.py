@@ -1,8 +1,8 @@
 import re
+from shlex import split
 
 import miniEnv as env
-from appSettings import miniSettings as ms
-from shlex import split
+from appSettings import miniSettings; ms = miniSettings
 
 class argumentClassifier:
 

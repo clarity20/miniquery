@@ -1,7 +1,7 @@
 import os
 from sys import exit
 
-from errorManager import miniErrorManager as em, ReturnCode
+from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 
 # Declare the environment (for export)
 HOME = ''

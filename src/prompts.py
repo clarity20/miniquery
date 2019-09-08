@@ -1,7 +1,7 @@
 import re
 from prompt_toolkit.styles import Style
 
-from appSettings import miniSettings as ms
+from appSettings import miniSettings; ms = miniSettings
 
 # Function to create a massively customizable prompt from a string.
 # '${u:yBI}' in the string would mean the user name in yellow bold italic
