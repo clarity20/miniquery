@@ -285,10 +285,10 @@ def doHelp(argv):
   *set <name>=<value> : Set a MINIQUERY program setting\n\
   *seta <alias>=<cmd> : Set up an alias for a command\n\
   *setv <name>=<value>: Set a macro variable\n\
-  *get                : Inspect a setting value\n\
-  *geta               : Inspect a setting value\n\
-  *getv               : Inspect a setting value\n\
-  *save               : Save MINIQUERY user settings\n\
+  *get                : Inspect a MINIQUERY program setting\n\
+  *geta               : Inspect an alias\n\
+  *getv               : Inspect a variable\n\
+  *save               : Save MINIQUERY settings, aliases, variables\n\
   *source <file>      : Read and execute commands from a file\n\
   *unalias <name>     : Undefine a command alias\n\
   *unset              : Unset a MINIQUERY setting\n\
