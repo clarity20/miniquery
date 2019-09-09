@@ -1,21 +1,48 @@
+######## Helper functions ########
+
+function make_clean()
+{
+    rm -f "${MINI_C}" "${MINI_EXE}"
+}
+
+function generate_mini_c()
+{
+    cython -3 --embed "${MINI_PY}"
+}
+
+######## Platform-agnostic definitions ########
+
+PROJECT_DIR=${HOME}/projects/miniquery
+SCRIPT_DIR=${PROJECT_DIR}/scripts
+MINI_PY=${SCRIPT_DIR}/mini.py
+MINI_C=${SCRIPT_DIR}/mini.c
+
+######## Main code ########
+
 case $OSTYPE in
   *android*)
-    # First "make clean"
-    rm -f mini.c mini
 
-    # Generate C source from python
-    cython -3 --embed mini.py
+    MINI_EXE=${SCRIPT_DIR}/mini
+
+    make_clean
+    generate_mini_c
 
     # Generate EXE from C source file
-    arm-linux-androideabi-clang -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o mini mini.c -lpython3.7m
-    break
+    arm-linux-androideabi-clang -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o "${MINI_EXE}" "${MINI_C}" -lpython3.7m
     ;;
+
   *linux*)
-    echo "Linux not implemented."
-    break
+
+    MINI_EXE=${SCRIPT_DIR}/mini
+
+    make_clean
+    generate_mini_c
+
+    gcc -I /usr/include/python3.4m -L /usr/lib64 -o "${MINI_EXE}" "${MINI_C}" -lpython3.4m
     ;;
+
   *win*)
     echo "Windows not implemented."
-    break
+    MINI_EXE=${SCRIPT_DIR}/mini.exe
     ;;
 esac

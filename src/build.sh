@@ -1,31 +1,64 @@
-case $OSTYPE in:
-  *android*)
-    # First "make clean"
-    rm -f includes.pyx  includes.c  build/temp.linux-armv7l-3.7/includes.o  includes.cpython-37m.so
+######## Helper functions ########
 
-    # Auto-generate includes.pyx, the list of python files to be included in the DLL
-    for fn in *.py; do
-      if [[ ! "$fn" =~ ^(setup|include)\.py ]]; then
-        echo include \"$fn\" >> includes.pyx
+function make_clean() {
+   rm -f "${INCLUDES_PYX}"  "${INCLUDES_C}"  "${INCLUDES_O}"  "${INCLUDES_SO}"
+}
+
+function generate_includes_pyx() {
+    for fn in "${SRC_DIR}"/*.py; do
+      bn=`basename "$fn"`
+      if [[ ! "$bn" =~ ^(setup|include)\.py$ ]]; then
+        echo include \""$bn"\" >> "${INCLUDES_PYX}"
       fi
     done
+}
 
-    # Convert the list into a C source file
-    cython -3 includes.pyx
+function includes_pyx_to_c() {
+    cython -3 $"{INCLUDES_PYX}"
+}
+
+######## Platform-agnostic definitions ########
+
+PROJECT_DIR=${HOME}/projects/miniquery
+SRC_DIR=${PROJECT_DIR}/src
+INCLUDES_PYX=${SRC_DIR}/includes.pyx
+INCLUDES_C=${SRC_DIR}/includes.c
+
+######## Main code ########
+
+case $OSTYPE in
+  *android*)
+
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-armv7l-3.7
+    INCLUDES_O=${BUILD_DIR}/includes.o
+    INCLUDES_SO=${SRC_DIR}/includes.cpython-37m.so
+
+    make_clean
+    generate_includes_pyx
+    includes_pyx_to_c
 
     # Convert C source into .o object file
-    arm-linux-androideabi-clang -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -Wunreachable-code -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python3.7m -c includes.c -o build/temp.linux-armv7l-3.7/includes.o
+    arm-linux-androideabi-clang -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -Wunreachable-code -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python3.7m -c "${INCLUDES_C}" -o "${INCLUDES_O}"
 
     # Generate DLL/.so from object file
-    arm-linux-androideabi-clang -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib build/temp.linux-armv7l-3.7/includes.o -L/data/data/com.termux/files/usr/lib -lpython3.7m -o /data/data/com.termux/files/home/projects/miniquery/src/includes.cpython-37m.so
-    break
+    arm-linux-androideabi-clang -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${INCLUDES_O}" -L/data/data/com.termux/files/usr/lib -lpython3.7m -o "${INCLUDES_SO}"
     ;;
+
   *linux*)
-    echo "Linux not implemented."
-    break
+
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-x86_64-3.4m
+    INCLUDES_O=${BUILD_DIR}/includes.o
+    INCLUDES_SO=${SRC_DIR}/includes.so
+
+    make_clean
+    generate_includes_pyx
+    includes_pyx_to_c
+
+    gcc -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c "${INCLUDES_C}" -o "${INCLUDES_O}"
+    gcc -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld "${INCLUDES_O}" -L/usr/lib64 -lpython3.4m -o "${INCLUDES_SO}"
     ;;
+
   *win*)
     echo "Windows not implemented."
-    break
     ;;
 esac
