@@ -26,10 +26,15 @@ class queryProcessor:
             except KeyError:
                 pass
 
-            if sql[:7].lower() == 'select ':
+            firstWord = sql.partition(' ')[0].lower()
+            if firstWord in ['select', 'show', 'desc']:
                 self.queryType = QueryType.SELECT
-            else:
+            elif firstWord == 'update':
                 self.queryType = QueryType.UPDATE
+            elif firstWord == 'delete':
+                self.queryType = QueryType.DELETE
+            elif firstWord == 'insert':
+                self.queryType = QueryType.INSERT
         else:
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
