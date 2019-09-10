@@ -1,7 +1,8 @@
 ######## Helper functions ########
 
 function make_clean() {
-   rm -f "${INCLUDES_PYX}"  "${INCLUDES_C}"  "${INCLUDES_O}"  "${INCLUDES_SO}"
+    # Move previous files to "old" directory
+    mv "${INCLUDES_PYX}"  "${INCLUDES_C}"  "${INCLUDES_O}"  "${INCLUDES_SO}" old
 }
 
 function generate_includes_pyx() {
@@ -14,7 +15,7 @@ function generate_includes_pyx() {
 }
 
 function includes_pyx_to_c() {
-    cython -3 $"{INCLUDES_PYX}"
+    cython -3 "${INCLUDES_PYX}"
 }
 
 ######## Platform-agnostic definitions ########
@@ -42,6 +43,8 @@ case $OSTYPE in
 
     # Generate DLL/.so from object file
     arm-linux-androideabi-clang -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${INCLUDES_O}" -L/data/data/com.termux/files/usr/lib -lpython3.7m -o "${INCLUDES_SO}"
+
+    strip "${INCLUDES_SO}"
     ;;
 
   *linux*)
@@ -56,6 +59,8 @@ case $OSTYPE in
 
     gcc -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c "${INCLUDES_C}" -o "${INCLUDES_O}"
     gcc -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld "${INCLUDES_O}" -L/usr/lib64 -lpython3.4m -o "${INCLUDES_SO}"
+
+    strip "${INCLUDES_SO}"
     ;;
 
   *win*)

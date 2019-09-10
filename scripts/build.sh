@@ -2,7 +2,8 @@
 
 function make_clean()
 {
-    rm -f "${MINI_C}" "${MINI_EXE}"
+    # Move previous files to "old" directory
+    mv "${MINI_C}" "${MINI_EXE}" old
 }
 
 function generate_mini_c()
@@ -29,6 +30,8 @@ case $OSTYPE in
 
     # Generate EXE from C source file
     arm-linux-androideabi-clang -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o "${MINI_EXE}" "${MINI_C}" -lpython3.7m
+
+    strip "${MINI_EXE}"
     ;;
 
   *linux*)
@@ -39,6 +42,8 @@ case $OSTYPE in
     generate_mini_c
 
     gcc -I /usr/include/python3.4m -L /usr/lib64 -o "${MINI_EXE}" "${MINI_C}" -lpython3.4m
+
+    strip "${MINI_EXE}"
     ;;
 
   *win*)
