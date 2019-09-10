@@ -1,5 +1,8 @@
 import sys
 from enum import Enum
+from prompt_toolkit import print_formatted_text
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.styles import Style
 
 class ReturnCode(Enum):
     SUCCESS = 0
@@ -38,10 +41,10 @@ errorMsgDict = {
 
 class ErrorManager:
 
-    # The data members can be class-scope because the class is a singleton anyway
-    errMsg = ''
-    returnCode = ReturnCode.SUCCESS
-    errOutputStream = sys.stderr
+    def __init__(self):
+        self.errMsg = ''
+        self.returnCode = ReturnCode.SUCCESS
+        self.errOutputStream = sys.stderr
 
     def setError(self, code, *args, msgOverride=""):
         if '$' in msgOverride:
@@ -64,14 +67,25 @@ class ErrorManager:
         return self.returnCode
 
     def doExit(self, msg=None):
-        print(msg if msg else self.errMsg, file=self.errOutputStream)
+        if self.errOutputStream.isatty() and self.returnCode.value:
+            color = 'yellowgreen' if self.returnCode == ReturnCode.USER_EXIT else 'red'
+            print_formatted_text(FormattedText([(color, msg or self.errMsg)]),
+                                file=self.errOutputStream)
+        else:
+            print(msg if msg else self.errMsg, file=self.errOutputStream)
+
         sys.exit(0 if self.returnCode == ReturnCode.USER_EXIT
-                   else self.returnCode.value)
+                     else self.returnCode.value)
 
     # Warn: For situations that warrant giving the user a chance to
     # fix things up instead of totally exiting the program
     def doWarn(self, msg=None):
-        print(msg if msg else self.errMsg, file=self.errOutputStream)
+        if self.errOutputStream.isatty() and self.returnCode.value:
+            print_formatted_text(FormattedText([('red', msg or self.errMsg)]),
+                                file=self.errOutputStream)
+        else:
+            print(msg if msg else self.errMsg, file=self.errOutputStream)
+
         # Wipe out the error state so the user can continue
         self.returnCode = ReturnCode.SUCCESS
         self.errMsg = ''
