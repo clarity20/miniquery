@@ -24,6 +24,11 @@ class argumentClassifier:
         self.options[setTo] = None
 
     def classify(self, argList):
+        # Initialize the table name now if the data is available.
+        # This way, the first-argument, per-query table naming
+        # will only be in effect when there is no anchor table.
+        self.mainTableName = ms.settings['Settings']['table']
+
         # Turn on the preconfigured settings first
         for arg in split(env.MINI_OPTIONS) + argList:
             if arg[0] == '-':

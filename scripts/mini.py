@@ -84,16 +84,27 @@ def main():
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = 'e' in args.options
     if oneAndDoneMode:
-        if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+        cmd = " ".join(sys.argv[2:])    # skip "mini -e"
+        # Miniquery command
+        if cmd.startswith(ms.settings['Settings']['leader']):
+            dispatchCommand(cmd, '')
             em.doExit()
-        queryProcessor(args).process()
-        em.doExit()
+        # Query
+        else:
+            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                em.doExit()
+            dispatchCommand(cmd, '')
+            em.doExit()
 
-    # If there is a query on the command line, accept it
-    if args.mainTableName and args.wheres or args.updates or args.postSelects:
-        if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
-            em.doExit()
-        queryProcessor(args).process() == ReturnCode.SUCCESS or em.doExit()
+    # If there is a command or a query on the command line, accept it before starting the main loop
+    cmd = " ".join(sys.argv[1:])    # skip "mini"
+    if cmd.startswith(ms.settings['Settings']['leader']):
+        dispatchCommand(cmd, '')
+    elif cmd:
+        if args.mainTableName and args.wheres or args.updates or args.postSelects:
+            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+                em.doExit()
+            dispatchCommand(cmd, '')
 
     # Prelude to the pseudo-infinite event loop
     print('WELCOME TO MINIQUERY!\n')
@@ -255,7 +266,6 @@ def dispatchCommand(cmd, oldTableName):
         args.classify(argv)
 
         # Reconfigure if/when the table name changes
-        #TODO: Move this to the callback for table-name changing
         if args.mainTableName != oldTableName:
             if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
                 em.doExit()
@@ -263,7 +273,7 @@ def dispatchCommand(cmd, oldTableName):
 
         retValue = queryProcessor(argv).process()
         if retValue != ReturnCode.SUCCESS:
-            # Allow the user to fix the connection settings and keep going
+            # Warn the user the query cannot be processed and continue the command loop
             #TODO Verify that changed environments are actually re-loaded
             em.doWarn()
             return retValue, oldTableName
@@ -403,10 +413,11 @@ def doSetDatabase(argv):
     return ReturnCode.SUCCESS
 
 def doSetTable(argv):
-    global setupPrompt, settingsChanged
+    global args, setupPrompt, settingsChanged
 
     #TODO: Allow for abbreviated table names by expanding here
     ms.settings['Settings']['table'] = argv[0]
+    args.mainTableName = argv[0]
     setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS
@@ -415,6 +426,7 @@ def doClearTable(argv):
     global setupPrompt, settingsChanged
 
     ms.settings['Settings']['table']=''
+    args.mainTableName = ''
     setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS
