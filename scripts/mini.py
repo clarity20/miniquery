@@ -2,7 +2,8 @@ import os
 import sys
 import re
 from shlex import split
-from prompt_toolkit import PromptSession
+from prompt_toolkit import PromptSession, print_formatted_text
+from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
@@ -84,7 +85,11 @@ def main():
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = 'e' in args.options
     if oneAndDoneMode:
-        cmd = " ".join(sys.argv[2:])    # skip "mini -e"
+        # Take everything after '-e' to be the command;
+        # all option flags need to come *before* it
+        which = sys.argv.index('-e') + 1
+        cmd = " ".join(sys.argv[which:])
+
         # Miniquery command
         if cmd.startswith(ms.settings['Settings']['leader']):
             dispatchCommand(cmd, '')
@@ -96,6 +101,11 @@ def main():
             dispatchCommand(cmd, '')
             em.doExit()
 
+    # Prelude to the pseudo-infinite event loop
+    print_formatted_text(FormattedText([('lightgreen', '\nWELCOME TO MINIQUERY!')]))
+    print('Copyright (c) 2019 Miniquery AMDG, LLC\n')
+    print('Enter {}help for help.\n'.format(ms.settings['Settings']['leader']))
+
     # If there is a command or a query on the command line, accept it before starting the main loop
     cmd = " ".join(sys.argv[1:])    # skip "mini"
     if cmd.startswith(ms.settings['Settings']['leader']):
@@ -106,10 +116,6 @@ def main():
                 em.doExit()
             dispatchCommand(cmd, '')
 
-    # Prelude to the pseudo-infinite event loop
-    print('WELCOME TO MINIQUERY!\n')
-    print('Copyright (c) 2019 Miniquery AMDG, LLC\n')
-    print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
     histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = FileHistory(histFileName)
     session = PromptSession(history = historyObject)
@@ -134,6 +140,7 @@ def main():
         # according to the line protocol until a complete command is received
         try:
             while 1:
+                print()
                 cmd = session.prompt(PS1Prompt if usePS1Prompt else PS2Prompt,
                         style=promptStyle, enable_open_in_editor=True,
                         editing_mode=ms.settings['Settings']['editMode'])
@@ -289,7 +296,8 @@ def doHelp(argv):
   *quit               : Exit MINIQUERY\n\
   *help <command>     : Detailed help for a command\n\
   *history <count>    : Display command history\n\
-  *table <name>       : Set the default table name\n\
+  *db <name>          : Set the active database\n\
+  *table <name>       : Set the active table name\n\
   *clear <name>       : Clear the default table name\n\
   *format             : Select a format for query output\n\
   *set <name>=<value> : Set a MINIQUERY program setting\n\
@@ -309,7 +317,12 @@ def doHelp(argv):
 #*m{ode}             : Select a SQL subfamily mode\n\
 #*ab{brev}           : Define an object-name abbreviation\n\
 #TODO: Add a list of TOPICS such as the prompt and how to write MINI-queries
-#TODO: (Point the user to a tutorial)
+#TODO: Add a list of cmdline opts/flags with a few general instructions as follows:
+#TODO:   Flags with values must be written -x=1234, i.e. equal sign with no spaces.
+#TODO:     e: one-and-done, followed ONLY by the command. Any other option flags must precede the -e.
+#TODO:     p: password (Useful when stdout is redirected; then, without a PW the program errors-out)
+#TODO:     2v/3v: logic       a,o: conjunction
+#TODO: Finally, point the user to a tutorial.
 
         print(helpText.replace('*', ms.settings['Settings']['leader']))
     else:
@@ -335,6 +348,7 @@ def doSql(sql):
     if fullSql[:4].lower() == "use ":
         ms.settings['Settings']['database'] = fullSql[4:]
         ms.settings['Settings']['table'] = ''
+        args.mainTableName = ''
         # Update the prompt
         setupPrompt = True
 
@@ -407,6 +421,7 @@ def doSetDatabase(argv):
     # Run a "use" query to make the change effective
     #TODO: Does this work ONLY for MYSQL, or for all RDBMS?
     queryProcessor(args).process("USE " + argv[0])
+    args.mainTableName = argv[0]
     # Update the prompt
     setupPrompt = True
     settingsChanged = True
