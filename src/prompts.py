@@ -23,9 +23,9 @@ def stringToPrompt(s):
     # promptPrefix holds the unchangeable "MINI" prefix for the prompt.
     # Prompt objects are order-sensitive.
     promptPrefix = [
-        ('class:sep'   , '[[ '),
-        ('class:program', 'MINI'),
-        ('class:sep'   , ' ]] '),
+        ('class:sep'   , '----<['),
+        ('class:program', '.MINI.'),
+        ('class:sep'   , ']>----'),
         ]
 
     # Data definitions for converting the string to a prompt. We want some
