@@ -118,7 +118,11 @@ class queryProcessor:
                         columnWidths[col] = 4
 
             # Wrapless or word-wrapped printout
-            screenWidth, b = os.get_terminal_size()
+            try:
+                screenWidth, b = os.get_terminal_size()
+            except OSError:
+                # Screen width is unavailable when stdout is not a tty (i.e. redirection)
+                screenWidth = 999999
             if 'nowrap' in self.arguments.options or sum(columnWidths) + columnCount < screenWidth:
                 format = " ".join(["%%-%ss" % l for l in columnWidths])
                 result = [format % tuple(columnHdrs)]
