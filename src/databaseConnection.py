@@ -1,8 +1,10 @@
+import sys
 import miniEnv as env
-from appSettings import miniSettings; ms = miniSettings
+from appSettings import miniSettings, fakePass; ms = miniSettings
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from sqlalchemy import create_engine
 from prompt_toolkit import prompt
+from prompt_toolkit.formatted_text import FormattedText
 
 # Database connection class. Should be used like a singleton.
 class databaseConnection():
@@ -58,11 +60,21 @@ class databaseConnection():
         userPart = ''
         if cxnSettings[defType]['MINI_USER']:
             if not cxnSettings[defType]['MINI_PASSWORD'] and not self._gotPassword:
-                cxnSettings[defType]['MINI_PASSWORD'] = prompt(
-                        message="Please enter password: ", is_password=True)
-                self._gotPassword = True  # Prevents repeated asks in a no-password situation
+                # In a tty (screen-interactive) situation, ask for a password
+                if sys.stdout.isatty():
+                    msg ='Please enter password for user "{}": '.format(
+                            cxnSettings[defType]['MINI_USER'])
+                    cxnSettings[defType]['MINI_PASSWORD'] = prompt(
+                            message=FormattedText([('yellow', msg)]), is_password=True)
+                    self._gotPassword = True  # Prevents repeated asks in a no-password situation
+                # In a non-tty situation (i.e. stdout is redirected), throw error
+                else:
+                    return em.setError(ReturnCode.MISSING_PASSWORD)
+            # Use cmdline password if there is one, otherwise use config password
+            if cxnSettings[defType]['MINI_PASSWORD'] == fakePass:
+                cxnSettings[defType]['MINI_PASSWORD'] = ''
             userPart = '{}:{}'.format(cxnSettings[defType]['MINI_USER'],
-                                    cxnSettings[defType]['MINI_PASSWORD'])
+                                        cxnSettings[defType]['MINI_PASSWORD'])
 
         hostPart = ''
         if cxnSettings[defType]['MINI_HOST']:

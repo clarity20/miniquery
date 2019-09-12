@@ -20,6 +20,7 @@ class ReturnCode(Enum):
     MISSING_SETTINGS_FILE = 12
     INVALID_QUERY_SYNTAX = 13
     PROMPT_ERROR = 14
+    MISSING_PASSWORD = 15
 
 errorMsgDict = {
     0 : '',
@@ -37,6 +38,7 @@ errorMsgDict = {
     12 : 'Application settings file "{0}" missing or unreadable.',
     13 : 'Query syntax error: {0}, {1}',
     14 : 'Illegal {0} "{1}" in prompt.',
+    15 : 'Unable to prompt for password. Please specify it using "-p" option or config file.',
     }
 
 class ErrorManager:
@@ -68,7 +70,7 @@ class ErrorManager:
 
     def doExit(self, msg=None):
         if self.errOutputStream.isatty() and self.returnCode.value:
-            color = 'yellowgreen' if self.returnCode == ReturnCode.USER_EXIT else 'red'
+            color = 'lightgreen' if self.returnCode == ReturnCode.USER_EXIT else 'red'
             print_formatted_text(FormattedText([(color, msg or self.errMsg)]),
                                 file=self.errOutputStream)
         else:

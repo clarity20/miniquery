@@ -3,6 +3,8 @@ import miniEnv as env
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from configobj import ConfigObj
 
+fakePass = '-1.a###0q'
+
 # This class manages the Miniquery program "settings" (not to be confused
 # with the database "configurations").
 

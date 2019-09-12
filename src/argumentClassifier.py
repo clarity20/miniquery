@@ -2,7 +2,7 @@ import re
 from shlex import split
 
 import miniEnv as env
-from appSettings import miniSettings; ms = miniSettings
+from appSettings import miniSettings, fakePass; ms = miniSettings
 
 class argumentClassifier:
 
@@ -78,6 +78,13 @@ class argumentClassifier:
                 self.mainTableName = arg
             else:
                 self.wheres.append(arg)
+
+        # Kluge: For the password, give the option precedence over
+        # the config setting. The code that cares about this is in databaseCxn.py
+        # where "args" is not readily accessible. So we set the value here.
+        if 'p' in self.options:
+            defType = ms.settings['ConnectionString']['definitionType']
+            ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self.options['p'] or fakePass
 
         # Fall back on the program settings when certain important options
         # are not set on the command line
