@@ -1,0 +1,111 @@
+This is a rough outline of a prospective white paper or research paper about
+TQL.
+[Bracketed items are interesting but not innovative.]
+
+I. Abstract
+    We introduce the Terse Query Language (TQL), a software suite inspired by
+SQL and an uncommon exemplar of programming languages specially designed for
+expressive power. We survey a series of techniques to address linguistic
+expressiveness and their implementations in TQL. We discuss issues arising in
+the design and implementation of expressive languages are discussed.
+
+II. Introduction
+    Expressiveness
+        Approximating bijectivity between input sequences <-> meanings
+        Related/Prior work (Is II the right place for this?)
+            research/theory
+            "expressive" tools
+                The closest match: "Emmet" - Expressive HTML:
+					https://github.com/mattn/emmet-vim
+					-- A markup language not an imperative one
+					-- Many repeated words and tokens enhances the efficiency rate
+						(characters typed as a percentage of characters inflated to)
+                Unix-like terseness: w ls ln -[anxyteiso] (etc.)
+                Fasd, other fuzzy file-finders
+                Vim commands. Macros! My stuff relates to normal query-writing
+                    somewhat like vim relates to normal text editors: you are made
+                    to think differently
+                Command-line completion techniques, quick editing features
+                Adaptive/prioritizing algos -- "frecent," MRU, etc?
+                    other possible priorities: the most effort-saving frecent cmds
+            Exp'ness applies to tools. Languages... not so much. TQL is an
+                unusual extension from little ditties to a much larger
+                command-domain. Resembles highly-mixable collextion of shell
+                functions and aliases.
+            SQL tools
+                Bigbash: convert SELECT statements to scripts for various file fmts
+                [Mycli: an event-driven CLI, runs in an infinite command loop;
+                    offers context-sensitive, *popup* autocomplete but doesn't
+                    improve upon SQL's syntax; you still need to think in SQL.
+                    INVESTIGATE prompt-toolkit, a building block ]
+                q (in github acct "harelba"): Extension of sqlite-SQL to *.[ct]sv files.
+                    Visualize:    mini [args ... ] | xargs q
+        A design consideration... when?
+            When the base language is imperative
+                The input are single statements. Getting work done quickly and
+                easily is a priority, especially for the power user.
+            When the language is domain-specific
+                In general-purpose languages, the input are entire programs.
+                One doesn't care so much about program size. Maintainability
+                concerns limit expressivity.
+        Measuring: ????
+    Coding as a writing process. Not related to all this. Good blogging idea
+    though. Pseudocode it. Get it working; replace errant ideas with sound
+    ones. Optimize working code for functionality. Comment to help me
+    understand as I code. Sit on it a long time. Revisit it to add features,
+    fix a bug, refactor, or whatever. How easily/well does it read NOW? etc.
+
+III. Development history and Design Considerations
+    Usability -- REFER TO TEXTS ON THIS SUBJECT
+        Make the most common tasks easier. (Low-hanging fruit first)
+        Use good mnemonics
+        Knowing your audience: Customizability
+    Choice of implementation language
+        Lexing/parsing
+            Regexes
+        Object orientation
+        Impt data structures
+        Parameter passing
+        Exception handling
+    Tradeoffs
+        Algorithms and their analysis
+            Asymptotic versus statistical: In many situations asymptotic
+            analysis is highly reductionist. You lose
+            more than you gain.
+            Optimize branches (case, if-then-else) by multilayering them
+    Normal software design concerns and TQL
+        Implement the easier-to-implement things first
+        Don't get too complicated. Keep the tasks small.
+        Efficiency
+            Techniques to avoid spawning subprocesses
+        Helpful Algorithms
+        How to implement many different ideas side-by-side
+            so that all/most combinations work in tandem. IOW,
+            design for orthogonality
+        [Project organization: files, directories, their naming conventions]
+
+IV. Implementation Details
+    The steps:
+        Lex & parse
+            2-3 passes to simplify the state machine
+        Expand -- multiple ways:
+            spelling-based
+                customizable expansion macros, e.g. px for price
+                case-inflected substring matching for camel- or snake-case
+                preference given to exact (non-abbr'd) words and perfect case-inflected matches
+            grammar-based ("smart")
+            tiebreaker: select. (Can be improved upon.)
+        Transform
+            note the ranges from the parse tree
+        Unwind & render
+            the former applies to new complex types, not native types
+
+IV. Results
+    Choose readily available (ie open-source) DBs
+    Gather statistics about column names and types to measure the effectiveness
+        of completion features
+
+V. Future Work and Conclusions
+    Impt design issues based on experience
+    Consider the bash2py transpiler
+
