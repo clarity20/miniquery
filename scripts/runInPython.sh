@@ -15,9 +15,10 @@ s/includes(.*Config)/configManager\1/
 s/includes(.*argument)/argumentClassifier\1/
 s/includes(.*query)/queryProcessor\1/
 s/includes(.*miniDb)/databaseConnection\1/
-s/includes(.*stringTo)/prompts\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
+s/includes(.*stringTo)/prompts\1/
+s/utilIncludes(.*MiniCompleter)/miniCompleter\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
 
-if grep -n includes "${TEMP_SOURCE_FILE}"; then
+if grep -q [Ii]ncludes "${TEMP_SOURCE_FILE}"; then
     echo "************************************************************************************************"
     echo Please add lines to $BASH_SOURCE that will convert these \"includes\" imports to the original files.
     echo "************************************************************************************************"
