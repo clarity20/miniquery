@@ -5,7 +5,7 @@ TQL.
 I. Abstract
     We introduce the Terse Query Language (TQL), a software suite inspired by
 SQL and an uncommon exemplar of programming languages specially designed for
-expressive power. We survey a series of techniques to address linguistic
+expressive density/power. We survey a series of techniques to address linguistic
 expressiveness and their implementations in TQL. We discuss issues arising in
 the design and implementation of expressive languages are discussed.
 
@@ -14,6 +14,8 @@ II. Introduction
         Approximating bijectivity between input sequences <-> meanings
         Related/Prior work (Is II the right place for this?)
             research/theory
+            Expressive density in natural langs: Latin, Greek
+                rich meaning in compact syntactical structures
             "expressive" tools
                 The closest match: "Emmet" - Expressive HTML:
 					https://github.com/mattn/emmet-vim
@@ -28,7 +30,7 @@ II. Introduction
                 Command-line completion techniques, quick editing features
                 Adaptive/prioritizing algos -- "frecent," MRU, etc?
                     other possible priorities: the most effort-saving frecent cmds
-            Exp'ness applies to tools. Languages... not so much. TQL is an
+            Exp'ness applies to tools. Pgmg Languages... not so much. TQL is an
                 unusual extension from little ditties to a much larger
                 command-domain. Resembles highly-mixable collextion of shell
                 functions and aliases.
