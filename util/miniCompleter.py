@@ -44,11 +44,11 @@ class MiniCompleter(Completer):
         self.sentence = sentence
         self.match_middle = match_middle
 
-    def build_regexes(self, word_before_cursor):
+    def build_regexes(self, given_word):
         # Build the regex(es) that we will use to identify all possible
         # substitutions while allowing for non-substitution of the same by
         # applying the straightforward subsequence-matching algorithm as well as any
-        # additional regexes to accommodate abbreviations in word_before_cursor.
+        # additional regexes to accommodate abbreviations in given_word.
 
         # Build a list of abbreviations found in the text, and
         # sort the found abbreviations by their starting position
@@ -56,7 +56,7 @@ class MiniCompleter(Completer):
         from includes import miniSettings; ms = miniSettings
         abbrs = ms.settings['Abbreviations']
         for abb in abbrs.items():
-            m = re.search(abb[0], word_before_cursor)
+            m = re.search(abb[0], given_word)
             if m:
                 abbrList.append(_abbrRecord(m.group(0), abb[1], m.start(), m.end()))
         def sortKey(abbrList):
@@ -71,7 +71,7 @@ class MiniCompleter(Completer):
 
         abbrIndex = -1; lookAheadIndex = 0
         lowerBoundforAppend = 0; workingList = []
-        self.maximalLists = []; allFeasibleLists = []      # lists of lists
+        maximalLists = []; allFeasibleLists = []      # lists of lists
         while True:
             # Look ahead for the next interval that can be added to the group
             lookAheadIndex = abbrIndex + 1
@@ -87,7 +87,7 @@ class MiniCompleter(Completer):
                 ln = len(workingList)-1
                 if not workingList in allFeasibleLists:
                     # Record this group as a maximal group
-                    self.maximalLists.append(workingList.copy())
+                    maximalLists.append(workingList.copy())
                     # Record all of the group's unrecorded subsets as feasible
                     for i in range(2**(ln+1)):   # walk the power set
                         subset = []
@@ -113,13 +113,73 @@ class MiniCompleter(Completer):
                     # The usual case: Try to increase the last digit
                     abbrIndex = last
 
+        def getSubsequenceRegex(s):
+            '''
+            Generate a regex for MINIQUERY-enhanced subsequence matching.
+            Essentially, we apply our own magic to the basic transformation
+                'abc' --> 'a.*b.*c'
 
+            :param s: The user-provided abbreviation to be expanded
+            '''
 
+            if not s:
+                return ''
 
-        #TODO:
-        # Build a regex for each group based on the abbreviation info and
-        # basic matching rules (subsequence-ness, snake-or-camel-case, etc.)
-        # Then (finally!) check whether the given expression matches ANY group
+            # Join the characters with the non-greedy "anything" regex.
+            # The individual characters are treated in 3 different ways
+            # based on letterness and case.
+            return ".*?".join([(
+                # Capital letters are word-delimiters. (We can relax this
+                # assumption later in the match algorithm.)
+                # Allow camel case AND snake case.
+                    '({}|_{})'.format(x, x.lower())      if x.isupper()
+                # Lowercase letters can represent either case
+                    else '[{}{}]'.format(x.upper(),x))   if x.isalpha()
+                # Non-letters are literal
+                    else x
+                for x in s])
+            return t
+
+        breakpoint()
+
+        # The "maximal lists" represent the combinations of substitutions that
+        # we have to check in order to know for certain whether a candidate
+        # "works" as an expansion of the abbreviated name, the "given_word"
+
+        # Build the regex corresponding to each maximal list and check it
+        # against the given word
+        workingList.clear()
+        for maximalList in maximalLists:
+
+            # Create a scratch copy of the given_word with parentheses inserted
+            workingList = list(given_word)
+            for i in maximalList[::-1]:
+                workingList.insert(abbrList[i].end, ')')
+                workingList.insert(abbrList[i].start, '(')
+            workingWord = ''.join(workingList)
+
+            # Break the parenthesized word into a sequence of pairs: non-()
+            # followed by () (Avoid empty pairs by putting 'if x' at the end.)
+            sequencePairs = [x.split('(') for x in workingWord.split(')') if x]
+
+            # Convert the sequence pairs into actual regexes
+            abbrIndex = 0
+            for pair in sequencePairs:
+                # For the non-parenthesized part we require a subsequence match
+                firstPart = '{}.*?'.format(getSubsequenceRegex(pair[0])) if pair[0] else ''
+                # For the parenthesized part we allow substitution OR subsequence
+                secondPart = '({}|{}).*?'.format(abbrList[maximalList[abbrIndex]].substitution,
+                            getSubsequenceRegex(pair[1])) if pair[1] else ''
+                if pair[1]:
+                    abbrIndex += 1
+
+            # Impose the assumeInitial option (my favorite!) if it's turned on
+            #TODO Needs implementation.
+            finalRegexes.append()
+
+            # (Finally!) check whether the given word matches the substitution group
+            #TODO This probably belongs in the caller, not here.
+            if re.search()
 
 
 
@@ -129,11 +189,14 @@ class MiniCompleter(Completer):
         if self.ignore_case:
             word = word.lower()
 
-        if self.match_middle:
-            return given_word in word
-        else:
-            # This is the word completer in a nutshell
-            return word.startswith(given_word)
+#TODO implement the new stuff here.
+
+
+#        if self.match_middle:
+#            return given_word in word
+#        else:
+#            # This is the word completer in a nutshell
+#            return word.startswith(given_word)
 
 
     def get_completions(self, document, complete_event):
