@@ -5,12 +5,10 @@ from shlex import split
 from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
-from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
 from prompt_toolkit.styles import Style
 
 sys.path.append("../src/")
-
 import miniEnv as env
 from includes import giveMiniHelp
 from includes import miniSettings as ms
@@ -104,7 +102,7 @@ def main():
     # Prelude to the pseudo-infinite event loop
     print_formatted_text(FormattedText([('lightgreen', '\nWELCOME TO MINIQUERY!')]))
     print('Copyright (c) 2019 Miniquery AMDG, LLC\n')
-    print('Enter {}help for help.\n'.format(ms.settings['Settings']['leader']))
+    print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
     # If there is a command or a query on the command line, accept it before starting the main loop
     cmd = " ".join(sys.argv[1:])    # skip "mini"
@@ -617,7 +615,6 @@ def doSetVariable(argv):
 def doUnsetVariable(argv):
     _unsetValueCommand("unsetv", argv, 'variable', 'Variables')
     return ReturnCode.SUCCESS
-
 
 # Function that accepts a value from a small set of valid options.
 # Accepts a typed-in value, but if none is provided brings up a selection dialog
