@@ -43,6 +43,7 @@ class MiniCompleter(Completer):
         self.WORD = WORD
         self.sentence = sentence
         self.match_middle = match_middle
+        self.regexCollection = []
 
     def build_regexes(self, given_word):
         # Build the regex(es) that we will use to identify all possible
@@ -54,7 +55,7 @@ class MiniCompleter(Completer):
         # sort the found abbreviations by their starting position
         abbrList=[]
         from includes import miniSettings; ms = miniSettings
-        abbrs = ms.settings['Abbreviations']
+        abbrs = ms.settings['Completion']['Abbreviations']
         for abb in abbrs.items():
             m = re.search(abb[0], given_word)
             if m:
@@ -138,7 +139,6 @@ class MiniCompleter(Completer):
                 # Non-letters are literal
                     else x
                 for x in s])
-            return t
 
         breakpoint()
 
@@ -149,6 +149,7 @@ class MiniCompleter(Completer):
         # Build the regex corresponding to each maximal list and check it
         # against the given word
         workingList.clear()
+        assumeInitial = ms.settings['Completion'].as_bool('assumeInitial')
         for maximalList in maximalLists:
 
             # Create a scratch copy of the given_word with parentheses inserted
@@ -162,42 +163,38 @@ class MiniCompleter(Completer):
             # followed by () (Avoid empty pairs by putting 'if x' at the end.)
             sequencePairs = [x.split('(') for x in workingWord.split(')') if x]
 
-            # Convert the sequence pairs into actual regexes
-            abbrIndex = 0
+            # Convert the list of sequence pairs into actual regexes
+            abbrIndex = 0; pairRegexes = []; fullRegex = ''
             for pair in sequencePairs:
                 # For the non-parenthesized part we require a subsequence match
                 firstPart = '{}.*?'.format(getSubsequenceRegex(pair[0])) if pair[0] else ''
                 # For the parenthesized part we allow substitution OR subsequence
                 secondPart = '({}|{}).*?'.format(abbrList[maximalList[abbrIndex]].substitution,
-                            getSubsequenceRegex(pair[1])) if pair[1] else ''
-                if pair[1]:
+                            getSubsequenceRegex(pair[1])) if len(pair)==2 else ''
+                pairRegexes.append('{}{}'.format(firstPart, secondPart))
+                if len(pair)==2:
                     abbrIndex += 1
 
             # Impose the assumeInitial option (my favorite!) if it's turned on
-            #TODO Needs implementation.
-            finalRegexes.append()
+            if assumeInitial and not given_word.startswith('*'):
+                fullRegex = '^{}'.format(''.join(pairRegexes))
+            else:
+                fullRegex = ''.join(pairRegexes)
 
-            # (Finally!) check whether the given word matches the substitution group
-            #TODO This probably belongs in the caller, not here.
-            if re.search()
-
-
-
+            # Save the current regex
+            self.regexCollection.append(fullRegex)
 
     def word_matches(self, word, given_word):
         """ True when the word before the cursor matches. """
         if self.ignore_case:
             word = word.lower()
 
-#TODO implement the new stuff here.
-
-
-#        if self.match_middle:
-#            return given_word in word
-#        else:
-#            # This is the word completer in a nutshell
-#            return word.startswith(given_word)
-
+        # Check whether the (candidate) word completes the given_word
+        # by looking at all the matching regexes
+        for regex in self.regexCollection:
+            if re.search(regex, word):
+                return True
+        return False
 
     def get_completions(self, document, complete_event):
         # Get list of words.
@@ -220,4 +217,6 @@ class MiniCompleter(Completer):
             if self.word_matches(a, word_before_cursor):
                 display_meta = self.meta_dict.get(a, '')
                 yield Completion(a, -len(word_before_cursor), display_meta=display_meta)
+
+        self.regexCollection.clear()
 
