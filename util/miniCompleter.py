@@ -140,8 +140,6 @@ class MiniCompleter(Completer):
                     else x
                 for x in s])
 
-        breakpoint()
-
         # The "maximal lists" represent the combinations of substitutions that
         # we have to check in order to know for certain whether a candidate
         # "works" as an expansion of the abbreviated name, the "given_word"

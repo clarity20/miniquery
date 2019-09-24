@@ -6,8 +6,11 @@ from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.document import Document
 from prompt_toolkit.styles import Style
 
+# MINIQUERY custom imports:
 sys.path.append("../src/")
 import miniEnv as env
 from includes import giveMiniHelp
@@ -19,6 +22,11 @@ from includes import queryProcessor
 from includes import miniDbConnection as dbConn
 from includes import stringToPrompt
 
+sys.path.append("../util")
+from utilIncludes import MiniCompleter
+from utilIncludes import CommandCompleter
+from utilIncludes import settingOptionsMap
+
 setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
@@ -26,23 +34,6 @@ args = argumentClassifier()
 
 #TODO non-writeable hist file gives an error!
 historyObject = None
-
-# Constants for interactive selection of finite-option settings:
-# 3-tuples containing option list, dialog title, and dialog text
-settingOptionsMap = {
-    'format'   : (['tab','wrap','nowrap','vertical'],
-                    'Result set formatting',
-                    'Please choose a display format for query results:'),
-    'endlineProtocol' : (['delimit','continue'],
-                    'Endline interpretation protocol',
-                    'Please choose a protocol for interpreting lines of query text:'),
-    'runMode'  : (['query','run','both'],
-                    'MINIQUERY run mode',
-                    'Choose whether to show the generated queries, to run them, or to do both:'),
-    'editMode' : (['VI', 'EMACS'],
-        'Command editing mode',
-        'Choose vi- or emacs-style command editing:'),
-    }
 
 def main():
     global args, setupPrompt
@@ -100,8 +91,8 @@ def main():
             em.doExit()
 
     # Prelude to the pseudo-infinite event loop
-    print_formatted_text(FormattedText([('lightgreen', '\nWELCOME TO MINIQUERY!')]))
-    print('Copyright (c) 2019 Miniquery AMDG, LLC\n')
+    print_formatted_text(FormattedText([('lightgreen', '\nWELCOME TO MINIQUERY!\n')]))
+    print('Copyright (c) 2019 Miniquery AMDG, LLC')
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
     # If there is a command or a query on the command line, accept it before starting the main loop
@@ -139,9 +130,11 @@ def main():
         try:
             while 1:
                 print()
+                cmdCompleter = CommandCompleter([])
                 cmd = session.prompt(PS1Prompt if usePS1Prompt else PS2Prompt,
                         style=promptStyle, enable_open_in_editor=True,
-                        editing_mode=ms.settings['Settings']['editMode'])
+                        editing_mode=ms.settings['Settings']['editMode'],
+                        completer=cmdCompleter, complete_while_typing=False)
 
                 # Is end-of-command detected?
                 if cmd.endswith(delimiter) or (
@@ -164,35 +157,7 @@ def main():
         if retValue == ReturnCode.USER_EXIT:
             break
 
-        # Experiment with autocompletion. Come back to this later.
-        if False:
-
-            # The table-name expander should look at argv[1]
-            # and return a candidate list. We would then call promptForExpansion() which would
-            # call the prompt-toolkit's wordCompleter() as below to resolve any ambiguity.
-
-            subChoiceDict = WordCompleter(['TimeFirst', 'TimeSecond', 'TimeThird'],
-                                    ignore_case=True)    # Would be passed in to the resolver
-            choiceDict = FuzzyCompleter(subChoiceDict)
-
-            # Set the prompt, showing the menu and providing a default choice
-            # Research the options complete_while_typing
-
-            # This updates the popup menu as more letters are typed. Backspacing does NOT bring back
-            # old options. Cursor movement disables completion.
-            s = prompt('MAW >> ',  # or session.prompt() ?
-                    history=FileHistory('t2.hst'),
-                    # Visit the GitHub page for python-prompt-toolkit for help writing a custom
-                    # autocompleter based on the FuzzyCompleter in the completion subdir.
-                    completer=choiceDict,
-                    default='Default'
-                    )
-            if s == 'Done.':
-                break
-            print ('You said ' + s)
-
     em.doExit()
-
 
 def dispatchCommand(cmd, oldTableName):
 
@@ -288,28 +253,9 @@ def dispatchCommand(cmd, oldTableName):
 def doHelp(argv):
     if not argv:
         print('\nMINIQUERY COMMANDS:\n')
-
-        helpText = '\
-  *sq <query>         : Execute a literal SQL statement\n\
-  *quit               : Exit MINIQUERY\n\
-  *help <command>     : Detailed help for a command\n\
-  *history <count>    : Display command history\n\
-  *db <name>          : Set the active database\n\
-  *table <name>       : Set the active table name\n\
-  *clear <name>       : Clear the default table name\n\
-  *format             : Select a format for query output\n\
-  *set <name>=<value> : Set a MINIQUERY program setting\n\
-  *seta <alias>=<cmd> : Set up an alias for a command\n\
-  *setv <name>=<value>: Set a macro variable\n\
-  *get                : Inspect a MINIQUERY program setting\n\
-  *geta               : Inspect an alias\n\
-  *getv               : Inspect a variable\n\
-  *save               : Save MINIQUERY settings, aliases, variables\n\
-  *source <file>      : Read and execute commands from a file\n\
-  *unalias <name>     : Undefine a command alias\n\
-  *unset              : Unset a MINIQUERY setting\n\
-  *unseta             : Unset an alias \n\
-  *unsetv             : Unset a macro variable\n'
+        ldr = ms.settings['Settings']['leader']
+        leftSide = ['{} {}'.format(c[0], c[1]) for c in commandList]
+        print('\n'.join(['  {}{:<20}: {}'.format(ldr,l,c[2]) for l,c in zip(leftSide,commandList)]))
 
 #TODO: Add these
 #*m{ode}             : Select a SQL subfamily mode\n\
@@ -322,7 +268,6 @@ def doHelp(argv):
 #TODO:     2v/3v: logic       a,o: conjunction
 #TODO: Finally, point the user to a tutorial.
 
-        print(helpText.replace('*', ms.settings['Settings']['leader']))
     else:
         #TODO print('FUTURE: command-specific help')
         pass
@@ -616,6 +561,17 @@ def doUnsetVariable(argv):
     _unsetValueCommand("unsetv", argv, 'variable', 'Variables')
     return ReturnCode.SUCCESS
 
+def doCompleter(argv):
+    words = ['this','that','thought']
+    comp = MiniCompleter(words)
+    complete_event = CompleteEvent(completion_requested=False)    # from bindings/completion.py:51
+    document = Document(text=" ".join(argv))
+    # List of Completions: [text, start_position, display]
+    matches = list(comp.get_completions(document, complete_event))
+    print('Matching candidates:')
+    print([m.text for m in matches])
+    return ReturnCode.SUCCESS
+
 # Function that accepts a value from a small set of valid options.
 # Accepts a typed-in value, but if none is provided brings up a selection dialog
 def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
@@ -732,28 +688,34 @@ def _unsetValueCommand(command, argv, objName, category):
 
 # Fcn names cannot be used until the fns have been defined, so this is 
 # way down here
-callbackMap = {
-    'help'   : doHelp,
-    'sq'     : doSql,
-    'quit'   : doQuit,
-    'history': doHistory,
-    'mode'   : doMode,
-    'format' : doFormat,
-    'save'   : doSave,
-    'set'    : doSet,
-    'get'    : doGet,
-    'unset'  : doUnset,
-    'seta'   : doAlias,
-    'geta'   : doGetAlias,
-    'unseta' : doUnalias,
-    'setv'   : doSetVariable,
-    'getv'   : doGetVariable,
-    'unsetv' : doUnsetVariable,
-    'db'     : doSetDatabase,
-    'table'  : doSetTable,
-    'clear'  : doClearTable,
-    'source' : doSource,
-}
+from utilIncludes import commandList
+
+callbackList = [
+    doSql,
+    doQuit,
+    doHelp,
+    doHistory,
+    doSetDatabase,
+    doSetTable,
+    doClearTable,
+    #doMode,
+    doFormat,
+    doSet,
+    doAlias,
+    doSetVariable,
+    doGet,
+    doGetAlias,
+    doGetVariable,
+    doSave,
+    doSource,
+    doUnset,
+    doUnalias,
+    doUnsetVariable,
+    #doCompleter,
+]
+
+# Map/zip the command names to the corresponding callback functions
+callbackMap = dict(zip([c[0] for c in commandList], callbackList))
 
 # Main entry point.
 if __name__ == '__main__':

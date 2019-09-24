@@ -16,7 +16,10 @@ s/includes(.*argument)/argumentClassifier\1/
 s/includes(.*query)/queryProcessor\1/
 s/includes(.*miniDb)/databaseConnection\1/
 s/includes(.*stringTo)/prompts\1/
-s/utilIncludes(.*MiniCompleter)/miniCompleter\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
+s/utilIncludes(.*MiniComp)/miniCompleter\1/
+s/utilIncludes(.*CommandComp)/commandCompleter\1/
+s/utilIncludes(.*settingOp)/miniGlobals\1/
+s/utilIncludes(.*commandList)/miniGlobals\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
 
 if grep -q [Ii]ncludes "${TEMP_SOURCE_FILE}"; then
     echo "************************************************************************************************"
