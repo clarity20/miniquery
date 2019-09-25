@@ -11,11 +11,11 @@
 commandList = [
     ['sq',      '<query>',        'Execute a literal SQL statement'],
     ['quit',    '',               'Exit MINIQUERY'],
-    ['help',    '<command>',      'Detailed help for a command'],
+    ['help',    '',               'Summary help for MINIQUERY commands'],
     ['history', '<count>',        'Display command history' ],
     ['db',      '<name>',         'Set the active database'],
     ['table',   '<name>',         'Set the active table name'],
-    ['clear',   '<name>',         'Clear the default table name'],
+    ['clear',   '',               'Clear the default table name'],
 #    ['mode']   : doMode,
     ['format',  '',               'Select a format for query output'],
     ['set',     '<name>=<value>', 'Set a MINIQUERY program setting'],

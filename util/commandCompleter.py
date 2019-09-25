@@ -60,19 +60,32 @@ class CommandCompleter(Completer):
             # The word is an argument. The candidate list depends on the command
             word_before_cursor = document.get_word_before_cursor(WORD=self.WORD)
             cmd, x, y = text.partition(' ')
-            breakpoint()
             try:
-                words = settingOptionsMap[cmd][0]
+                if cmd in ['geta', 'unseta']:          # user chooses an alias
+                    words = list(ms.settings['Aliases'])
+                    if cmd == 'geta':
+                        words.append('*')
+                elif cmd in ['getv', 'unsetv']:        # user chooses a variable
+                    words = list(ms.settings['Variables'])
+                    if cmd == 'getv':
+                        words.append('*')
+                elif cmd in ['set', 'get', 'unset']:   # user chooses a setting
+                    defType = ms.settings['ConnectionString']['definitionType']
+                    words = list(ms.settings['Settings']) + ['definitionType'] \
+                            + list(ms.settings['ConnectionString'][defType])
+                    if cmd == 'get':
+                        words.append('*')
+                #TODO Still need to set the list for \db and \table commands
+                #TODO elif cmd in ['db', 'table']:
+                #TODO     etc.
+                else:
+                    words = settingOptionsMap[cmd][0]
             except KeyError:
-                #TODO: Fill in word lists for other cmds
-                #TODO: if cmd in ['get']:
-                #TODO:    words =
                 words = []
         else:
             # The word is a command. Candidates are the commands and aliases.
             word_before_cursor = text
             words = [c[0] for c in commandList] + list(ms.settings['Aliases'])
-
         if self.ignore_case:
             word_before_cursor = word_before_cursor.lower()
 
