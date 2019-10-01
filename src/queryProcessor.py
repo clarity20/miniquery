@@ -3,7 +3,7 @@ import os
 from sqlalchemy.sql import text
 
 from miniUtils import QueryType
-from configManager import miniConfigManager; cfg = miniConfigManager
+from configManager import masterDataConfig; cfg = masterDataConfig
 from databaseConnection import miniDbConnection; dbConn = miniDbConnection
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 
@@ -48,8 +48,9 @@ class queryProcessor:
         return ret
 
     def inflateQuery(self):
-        self.query = "SELECT * from table1 LIMIT 4" #TODO MMMM WHERE id >= 3"
+        self.query = "SELECT * from customers LIMIT 4" #TODO MMMM WHERE id >= 3"
         self.queryType = QueryType.SELECT
+        return ReturnCode.SUCCESS
 
     def runAndDisplayResult(self):
         conn = dbConn.getConnection()
@@ -133,13 +134,19 @@ class queryProcessor:
                 return ReturnCode.SUCCESS
             elif 'wrap' in self.arguments.options:
                 # Choose a helper column to make the wrap more readable
+                from appSettings import miniSettings; ms = miniSettings
+                try:
+                    dbCfg = cfg.databases[ms.settings['Settings']['database']]
+                    tableCfg = dbCfg.tables[ms.settings['Settings']['table']]
+                except KeyError:
+                    pass
                 if self.columnToSortBy:
                     # Look up the sorting column in the header by name. For this
                     # to work in the case of aliases, the sort column must hold
                     # the alias name, not the true name
                     helpColumn = columnHdrs.index(self.columnToSortBy)
-                elif cfg.config['primaryColumn']:
-                    helpColumn = columnHdrs.index(cfg.config['primaryColumn'])
+                elif tableCfg and tableCfg.config['primaryColumn']:
+                    helpColumn = columnHdrs.index(tableCfg.config['primaryColumn'])
                 else:
                     helpColumn = 0
                 helpColumnName = columnHdrs[helpColumn]

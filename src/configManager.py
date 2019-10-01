@@ -20,38 +20,102 @@ class RegexType(Enum):
     DEFAULT_DATE = 4
     DELETED = 5
 
-class ConfigManager:
+class MasterDataConfig:
+    '''
+    Umbrella class that stores both the schematic information and the user
+    configuration settings that pertain directly to the database(s),
+    organized hierarchically.
 
-    # member data
+    Program settings, OTOH, are stored in the AppSettings class.
+    '''
     def __init__(self):
-        self.config = {'standardColumns':'', 'primaryColumn':''}  # dict of k-v pairs
-        self.masterTableNameList = []     # list of names
-        self.masterColumnNameList = []    # list of tuples
+        # Set up a dictionary for the DB-specific configs
+        self.databases = {}
+        # Make client wait until the app settings are ready before calling setup():
+        #self.setup()
 
-    def loadTableNameList(self, tableListFile):
+    def loadDatabaseNames(self, databaseListFile):
+        try:
+            with open(databaseListFile, 'r') as databasesFp:
+                # Create a placeholder dictionary entryfor each DB
+                self.databases = dict((key.rstrip(), None) for key in databasesFp)
+
+        except FileNotFoundError:
+            query = 'SELECT {} FROM {}'.format('schema_name', 'information_schema.schemas')
+            resultSet = dbConn.getConnection().execute(text(query))
+            l = resultSet.fetchall()   # list of tuples
+            self.databases = dict((key[0], None) for key in l)
+
+        return ReturnCode.SUCCESS
+
+    def setup(self):
+        filename = "{}/{}".format(env.MINI_CACHE, 'databases')
+        self.loadDatabaseNames(filename)
+        # Initialize the main DB
+        mainDbName = ms.settings['Settings']['database']
+        if mainDbName:
+            self.databases[mainDbName] = DatabaseConfig(mainDbName)
+        return ReturnCode.SUCCESS
+
+
+class DatabaseConfig:
+    '''
+    Wrapper to hold list of table names.
+    Plan: Add a ChainMap to group the table's column names together in one view.
+    This would help tremendously with completion in auto-join situations.
+    '''
+    def __init__(self, dbName):
+        self.dbName = dbName
+        self.tableNames = []
+        self.tables = {}
+        self.setup()
+
+    def loadTableNames(self, tableListFile):
         try:
             # Create a list of table names
             with open(tableListFile, 'r') as tablesFp:
-                self.masterTableNameList = [tuple(l.rstrip().split('\t')) for l in tablesFp]
+                self.tableNames = [l.rstrip() for l in tablesFp]
 
         except FileNotFoundError:
             query = "SELECT {} FROM {} WHERE {} = '{}'".format(
                         "table_name",
                         "information_schema.tables",
                         "table_schema",
-                        env.MINI_DBNAME)
+                        self.dbName)
 
             resultSet = dbConn.getConnection().execute(text(query))
-            self.masterTableNameList = resultSet.fetchall()   # list of tuples
+            self.tableNames = resultSet.fetchall()   # list of tuples
 
         return ReturnCode.SUCCESS
 
+    def setup(self):
+        filename = "{}/{}/{}".format(env.MINI_CACHE, self.dbName, 'information_schema.tables')
+        self.loadTableNames(filename)
+        # When initializing a DB, go ahead and initialize its main table
+        mainTableName = ms.settings['Settings']['table']
+        if mainTableName:
+            self.tables[mainTableName] = TableConfig(mainTableName, self)
+        return ReturnCode.SUCCESS
 
-    def loadColumnNameList(self, tableDescFile, metadataType = ''):
+
+class TableConfig:
+    '''
+    Wrapper to hold list of column names AND the user settings for a single table.
+    '''
+    def __init__(self, tableName, parent):
+        self.config = {'standardColumns':'', 'primaryColumn':''}  # dict of k-v pairs
+        self.tableName = tableName
+        self.columnNames = []
+        self.parent = parent     # reference to the containing db
+        self.setup()
+
+        return
+
+    def loadColumnNames(self, columnListFile,  metadataType = ''):
         try:
             # Create a list of size-3 tuples
-            with open(tableDescFile, 'r') as columnsFp:
-                self.masterColumnNameList = [tuple(l.rstrip().split('\t')) for l in columnsFp]
+            with open(columnListFile, 'r') as columnsFp:
+                self.columnNames = [tuple(l.rstrip().split('\t')) for l in columnsFp]
 
         except FileNotFoundError:
             if metadataType:
@@ -59,7 +123,7 @@ class ConfigManager:
                 tableName = metadataType
             else:
                 tableSchema = env.MINI_DBNAME
-                tableName = re.search(r'(.*)\.columns$', tableDescFile).group(1)
+                tableName = re.search(r'(.*)\.columns$', columnListFile).group(1)
 
             query = "SELECT {} FROM {} WHERE {} = '{}' AND {} = '{}'".format(
                     'column_name, column_type, column_default',
@@ -68,57 +132,40 @@ class ConfigManager:
                     'table_name', tableName)
 
             resultSet = dbConn.getConnection().execute(text(query))
-            self.masterColumnNameList = resultSet.fetchall()   # list of tuples
+            self.columnNames = resultSet.fetchall()   # list of tuples
+
+        return ReturnCode.SUCCESS
+
+    def setup(self):
+        filename = "{}/{}/{}.columns".format(env.MINI_CACHE,
+                                                        self.parent.dbName,
+                                                        self.tableName)
+        self.loadColumnNames(filename)
+
+        #TODO: Consider pre-loading all table configs at once
+        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, self.parent.dbName)
+        if not self.loadConfigForTable(configFile, self.tableName):
+            return em.returnCode
 
         return ReturnCode.SUCCESS
 
 
-    # Configuration for schema-based programs like mini
-    def configureToSchema(self, tableName_0):
-        a, b, tableName = tableName_0.rpartition('/')
-
-        if not self.loadTableNameList("{}/{}/{}".format(
-                                                env.MINI_CACHE,
-                                                env.MINI_DBNAME,
-                                                'information_schema.tables')):
-            return em.returnCode
-
-        #TODO: Activate this when the time comes:
-#        expander = exp.tableExpander
-#        tableList = expander.getExpandedNames(tableName)
-        #tableName = 'table1'
-        tableName = 'customers'
-#        tableName = expander.promptForExpansion(tableName, tableList)
+#    # Configuration for metadata proograms like findTable
+#    def configureToMetadata(self, scriptName_0, metadataType):
+#        a, b, scriptName = scriptName_0.rpartition('/')
 #
-        if not self.loadColumnNameList("{}/{}/{}.columns".format(
-                                                        env.MINI_CACHE,
-                                                        env.MINI_DBNAME,
-                                                        tableName)):
-            return em.returnCode
-
-        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, env.MINI_DBNAME)
-        if not self.loadConfigForTable(configFile, tableName):
-            return em.returnCode
-
-        return ReturnCode.SUCCESS
-
-
-    # Configuration for metadata proograms like findTable
-    def configureToMetadata(self, scriptName_0, metadataType):
-        a, b, scriptName = scriptName_0.rpartition('/')
-
-        if not self.loadColumnNameList("{}/{}".format(
-                                                        env.MINI_CACHE,
-                                                        metadataType),
-                                                        metadataType):
-            return em.returnCode
-
-        # Load the script-specific configuration
-        configFile = "{}/metadataScripts.cfg".format(env.MINI_CONFIG)
-        if not self.loadConfigForTable(configFile, scriptName):
-            return em.returnCode
-
-        return ReturnCode.SUCCESS
+#        if not self.loadColumnNameList("{}/{}".format(
+#                                                        env.MINI_CACHE,
+#                                                        metadataType),
+#                                                        metadataType):
+#            return em.returnCode
+#
+#        # Load the script-specific configuration
+#        configFile = "{}/metadataScripts.cfg".format(env.MINI_CONFIG)
+#        if not self.loadConfigForTable(configFile, scriptName):
+#            return em.returnCode
+#
+#        return ReturnCode.SUCCESS
 
 
     # Load table-specific configuration settings
@@ -227,7 +274,7 @@ class ConfigManager:
                                 # list and store it. In the column list, accept
                                 # a populated or an unpopulated table name column
                                 column = [item for item in
-                                    self.masterColumnNameList if item[0] == value]
+                                    self.ColumnNames if item[0] == value]
                                 if column and len(column) == 1:
                                     columnType = sqlTypeToInternalType(column[0][1])
                                     sCount = str(regexCount)
@@ -274,12 +321,13 @@ class ConfigManager:
     def _acceptGenericConfig(self, key, value):
         # Substitute values for variable names, if any
         if '$' in value:
-            g = re.match('\$[A-Za-z_]+', value)
+            g = re.search(r'\$([A-Za-z_]+)', value)
             variable = g.group(0)
-            value.replace(variable, ms.settings['Settings'][variable[1:]])
+            value.replace(variable, ms.settings['Variables'][variable[1:]])
 
         self.config[key] = value
         return False     # the new value of regexMode
 
+# Keep the data config and cache information in a dictionary indexed by DB name
+masterDataConfig = MasterDataConfig()
 
-miniConfigManager = ConfigManager()

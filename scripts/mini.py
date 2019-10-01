@@ -16,7 +16,7 @@ import miniEnv as env
 from includes import giveMiniHelp
 from includes import miniSettings as ms
 from includes import miniErrorManager as em, ReturnCode
-from includes import miniConfigManager as cfg
+from includes import masterDataConfig as cfg
 from includes import argumentClassifier
 from includes import queryProcessor
 from includes import miniDbConnection as dbConn
@@ -85,7 +85,7 @@ def main():
             em.doExit()
         # Query
         else:
-            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+            if cfg.setup() != ReturnCode.SUCCESS:
                 em.doExit()
             dispatchCommand(cmd, '')
             em.doExit()
@@ -101,7 +101,7 @@ def main():
         dispatchCommand(cmd, '')
     elif cmd:
         if args.mainTableName and args.wheres or args.updates or args.postSelects:
-            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+            if cfg.setup() != ReturnCode.SUCCESS:
                 em.doExit()
             dispatchCommand(cmd, '')
 
@@ -237,11 +237,11 @@ def dispatchCommand(cmd, oldTableName):
 
         # Reconfigure if/when the table name changes
         if args.mainTableName != oldTableName:
-            if cfg.configureToSchema(args.mainTableName) != ReturnCode.SUCCESS:
+            if cfg.setup() != ReturnCode.SUCCESS:
                 em.doExit()
             oldTableName = args.mainTableName
 
-        retValue = queryProcessor(argv).process()
+        retValue = queryProcessor(args).process()
         if retValue != ReturnCode.SUCCESS:
             # Warn the user the query cannot be processed and continue the command loop
             #TODO Verify that changed environments are actually re-loaded
