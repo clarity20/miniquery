@@ -71,6 +71,12 @@ def main():
 
     args.classify(sys.argv[1:])   # skip the program name
 
+    # The configs and the cache must be loaded before any commands are
+    # processed. This is because the first cmd can be a sys cmd that needs
+    # a list of tab-completion candidates that comes from the db schema.
+    if cfg.setup() != ReturnCode.SUCCESS:
+        em.doExit()
+
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = 'e' in args.options
     if oneAndDoneMode:
@@ -85,8 +91,6 @@ def main():
             em.doExit()
         # Query
         else:
-            if cfg.setup() != ReturnCode.SUCCESS:
-                em.doExit()
             dispatchCommand(cmd, '')
             em.doExit()
 
@@ -101,8 +105,6 @@ def main():
         dispatchCommand(cmd, '')
     elif cmd:
         if args.mainTableName and args.wheres or args.updates or args.postSelects:
-            if cfg.setup() != ReturnCode.SUCCESS:
-                em.doExit()
             dispatchCommand(cmd, '')
 
     histFileName = os.path.join(env.HOME, '.mini_history')
@@ -358,13 +360,13 @@ def doFormat(argv):
 def doSetDatabase(argv):
     global args, setupPrompt, settingsChanged
 
-    #TODO: MAYBE allow for abbreviated db names by expanding here
-    ms.settings['Settings']['database'] = argv[0]
+    dbName = argv[0] if len(argv) > 0 else ''
+    ms.settings['Settings']['database'] = dbName
     ms.settings['Settings']['table'] = ''
     # Run a "use" query to make the change effective
     #TODO: Does this work ONLY for MYSQL, or for all RDBMS?
-    queryProcessor(args).process("USE " + argv[0])
-    args.mainTableName = argv[0]
+    queryProcessor(args).process("USE " + dbName)
+    args.mainTableName = ''
     # Update the prompt
     setupPrompt = True
     settingsChanged = True

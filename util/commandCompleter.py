@@ -5,6 +5,7 @@ from six import string_types
 from prompt_toolkit.completion import Completer, Completion
 
 sys.path.append("../src/")
+from configManager import masterDataConfig; cfg = masterDataConfig
 
 __all__ = [
     'CommandCompleter',
@@ -46,7 +47,7 @@ class CommandCompleter(Completer):
             words = words()
 
         # Strip off the MINIQUERY system command leader, leaving the command
-        from includes import miniSettings; ms = miniSettings
+        from appSettings import miniSettings; ms = miniSettings
         if document.text_before_cursor.startswith(ms.settings['Settings']['leader']):
             text = document.text_before_cursor.lstrip(ms.settings['Settings']['leader'])
         else:
@@ -75,9 +76,11 @@ class CommandCompleter(Completer):
                             + list(ms.settings['ConnectionString'][defType])
                     if cmd == 'get':
                         words.append('*')
-                #TODO Still need to set the list for \db and \table commands
-                #TODO elif cmd in ['db', 'table']:
-                #TODO     etc.
+                elif cmd == 'db':
+                    words = [db for db in cfg.databases.keys()]
+                elif cmd == 'table':
+                    db = ms.settings['Settings']['database']
+                    words = [t for t in cfg.databases[db].tableNames]
                 else:
                     words = settingOptionsMap[cmd][0]
             except KeyError:
