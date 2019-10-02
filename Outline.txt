@@ -91,10 +91,11 @@ IV. Implementation Details
         Lex & parse
             2-3 passes to simplify the state machine
         Expand -- multiple ways:
-            spelling-based
-                customizable expansion macros, e.g. px for price
-                case-inflected substring matching for camel- or snake-case
-                preference given to exact (non-abbr'd) words and perfect case-inflected matches
+            spelling-based     (*** This contains highly innovative material! ***)
+                Customizable expansion macros, e.g. px for price
+                    All combos of substitution and non-substitution are examined
+                Case-inflected substring matching for camel- or snake-case
+                Preference given to exact (non-abbr'd) words and perfect case-inflected matches
             grammar-based ("smart")
             tiebreaker: select. (Can be improved upon.)
         Transform
