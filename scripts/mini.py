@@ -363,6 +363,7 @@ def doSetDatabase(argv):
     dbName = argv[0] if len(argv) > 0 else ''
     ms.settings['Settings']['database'] = dbName
     ms.settings['Settings']['table'] = ''
+    cfg.changeDatabase(dbName)
     # Run a "use" query to make the change effective
     #TODO: Does this work ONLY for MYSQL, or for all RDBMS?
     queryProcessor(args).process("USE " + dbName)
@@ -375,9 +376,10 @@ def doSetDatabase(argv):
 def doSetTable(argv):
     global args, setupPrompt, settingsChanged
 
-    #TODO: Allow for abbreviated table names by expanding here
-    ms.settings['Settings']['table'] = argv[0]
-    args.mainTableName = argv[0]
+    tableName = argv[0] if len(argv) > 0 else ''
+    ms.settings['Settings']['table'] = tableName
+    cfg.databases[ms.settings['Settings']['database']].changeMainTable(tableName)
+    args.mainTableName = tableName
     setupPrompt = True
     settingsChanged = True
     return ReturnCode.SUCCESS

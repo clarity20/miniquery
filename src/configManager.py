@@ -31,7 +31,8 @@ class MasterDataConfig:
     def __init__(self):
         # Set up a dictionary for the DB-specific configs
         self.databases = {}
-        # Make client wait until the app settings are ready before calling setup():
+        # Make client explicitly call setup(). He should wait until
+        # the app settings are ready
         #self.setup()
 
     def loadDatabaseNames(self, databaseListFile):
@@ -46,6 +47,12 @@ class MasterDataConfig:
             l = resultSet.fetchall()   # list of tuples
             self.databases = dict((key[0], None) for key in l)
 
+        return ReturnCode.SUCCESS
+
+    def changeDatabase(self, dbName):
+        ''' Respond to a change of the main DB by lazy-loading its cfg '''
+        if not self.databases[dbName]:
+            self.databases[dbName] = DatabaseConfig(dbName)
         return ReturnCode.SUCCESS
 
     def setup(self):
@@ -86,6 +93,12 @@ class DatabaseConfig:
             resultSet = dbConn.getConnection().execute(text(query))
             self.tableNames = resultSet.fetchall()   # list of tuples
 
+        return ReturnCode.SUCCESS
+
+    def changeMainTable(self, tableName):
+        ''' Respond to a change of the main table by lazy-loading its cfg '''
+        if tableName not in self.tables:
+            self.tables[tableName] = TableConfig(tableName, self)
         return ReturnCode.SUCCESS
 
     def setup(self):
