@@ -5,7 +5,6 @@ from shlex import split
 from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
-from prompt_toolkit.shortcuts import yes_no_dialog, button_dialog, input_dialog
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.styles import Style
@@ -26,6 +25,7 @@ sys.path.append("../util")
 from utilIncludes import MiniCompleter
 from utilIncludes import CommandCompleter
 from utilIncludes import settingOptionsMap
+from utilIncludes import yes_no_dialog, button_dialog, input_dialog
 
 setupPrompt = True
 settingsChanged = False
@@ -318,6 +318,7 @@ def doQuit(argv):
         if yes_no_dialog(title='Quit MINIQUERY',
                 text='Exit MINIQUERY: Are you sure?'):
             return em.setError(ReturnCode.USER_EXIT)
+        return ReturnCode.SUCCESS
 
 def doSave(argv):
     global settingsChanged

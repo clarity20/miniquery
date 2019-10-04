@@ -19,7 +19,8 @@ s/includes(.*stringTo)/prompts\1/
 s/utilIncludes(.*MiniComp)/miniCompleter\1/
 s/utilIncludes(.*CommandComp)/commandCompleter\1/
 s/utilIncludes(.*settingOp)/miniGlobals\1/
-s/utilIncludes(.*commandList)/miniGlobals\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
+s/utilIncludes(.*commandList)/miniGlobals\1/
+s/utilIncludes(.*yes_no)/miniDialogs\1/'  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
 
 if grep -q [Ii]ncludes "${TEMP_SOURCE_FILE}"; then
     echo "************************************************************************************************"
