@@ -3,11 +3,11 @@
 import os
 import sys
 
-sys.path.append("/data/data/com.termux/files/home/projects/miniquery/src/")
+sys.path.append("../src")
 import miniEnv as env
 from miniHelp import HelpType, shouldHelpOrExecute, giveHelp
 from errorManager import miniErrorManager as em, ReturnCode
-from configManager import miniConfigManager
+from configManager import masterDataConfig
 
 def main():
     argc = len(sys.argv)-1;
@@ -20,7 +20,7 @@ def main():
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
-    if miniConfigManager.configureToMetadata(sys.argv[0], 'columns') != ReturnCode.SUCCESS:
+    if masterDataConfig.configureToMetadata(sys.argv[0], 'columns') != ReturnCode.SUCCESS:
         em.doExit()
 
 # Main entry point.
