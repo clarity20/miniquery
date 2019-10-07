@@ -6,7 +6,6 @@ from prompt_toolkit.filters import has_completions, has_focus
 from prompt_toolkit.formatted_text import is_formatted_text
 from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindings
-#from prompt_toolkit.layout.containers import VSplit, HSplit, DynamicContainer
 from prompt_toolkit.layout.containers import VSplit, HSplit, DynamicContainer, Window, WindowAlign
 from prompt_toolkit.layout.dimension import Dimension as D
 
@@ -16,7 +15,6 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.eventloop import run_in_executor
 from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout import Layout
-#from prompt_toolkit.widgets import ProgressBar, Button, Label, Box, TextArea, RadioList, Shadow, Frame
 from prompt_toolkit.widgets import ProgressBar, Label, Box, TextArea, RadioList, Shadow, Frame
 
 import six
@@ -43,19 +41,24 @@ class MiniButton(object):
     :param text: The caption for the button.
     :param handler: `None` or callable. Called when the button is clicked.
     :param width: Width of the button.
+    :param addHotkey: Create a hotkey for this button, using the prefix '&'
+        or defaulting to the first character.
     """
-    def __init__(self, text, handler=None, width=12):
+    def __init__(self, text, handler=None, width=12, addHotkey=True):
         assert isinstance(text, six.text_type)
         assert handler is None or callable(handler)
         assert isinstance(width, int)
 
-        # Locate the hotkey in the text
-        hotkeyFlag = '&'
-        try:
-            self.hotkeyIndex = text.index(hotkeyFlag)
-        except ValueError:
-            text = '{}{}'.format(hotkeyFlag, text)
-            self.hotkeyIndex = 0
+        if addHotkey:
+            # Locate the hotkey in the text
+            hotkeyFlag = '&'
+            try:
+                self.hotkeyIndex = text.index(hotkeyFlag)
+            except ValueError:
+                text = '{}{}'.format(hotkeyFlag, text)
+                self.hotkeyIndex = 0
+        else:
+            self.hotkeyIndex = -1
 
         self.text = text.replace(hotkeyFlag, '')
         self.handler = handler
@@ -89,16 +92,24 @@ class MiniButton(object):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.handler()
 
-        fragments = [
-            ('class:button.arrow', '<', handler),
-            ('[SetCursorPosition]', ''),
-            ('class:button.text',text[: self.hotkeyIndex + offset], handler),
-            ('underline', text[self.hotkeyIndex + offset], handler),
-            ('class:button.text', text[self.hotkeyIndex + offset + 1 :], handler),
-            ('class:button.arrow', '>', handler),
-                ]
-
-        return fragments
+        if self.hotkeyIndex >= 0:
+            # Button gets a hotkey by default
+            return [
+                ('class:button.arrow', '<', handler),
+                ('[SetCursorPosition]', ''),
+                ('class:button.text',text[: self.hotkeyIndex + offset], handler),
+                ('underline', text[self.hotkeyIndex + offset], handler),
+                ('class:button.text', text[self.hotkeyIndex + offset + 1 :], handler),
+                ('class:button.arrow', '>', handler),
+                    ]
+        else:
+            # User declined a hotkey
+            return [
+                ('class:button.arrow', '<', handler),
+                ('[SetCursorPosition]', ''),
+                ('class:button.text',text[: self.hotkeyIndex + offset], handler),
+                ('class:button.arrow', '>', handler),
+                    ]
 
     def _get_key_bindings(self):
         " Key bindings for the MiniButton. "
@@ -165,10 +176,12 @@ class MiniDialog(object):
         kb.add('tab', filter=~has_completions)(focus_next)
         kb.add('s-tab', filter=~has_completions)(focus_previous)
 
+        # Create a hotkey for every button if so indicated
         for btn in buttons:
-            key = btn.text[btn.hotkeyIndex]
-            kb.add(key.upper())(btn.handler)
-            kb.add(key.lower())(btn.handler)
+            if btn.hotkeyIndex >= 0:
+                key = btn.text[btn.hotkeyIndex]
+                kb.add(key.upper())(btn.handler)
+                kb.add(key.lower())(btn.handler)
 
         frame = Shadow(body=Frame(
             title=lambda: self.title,
@@ -257,6 +270,109 @@ def input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
         title=title,
         body=HSplit([
             Label(text=text, dont_extend_height=True),
+            textfield,
+        ], padding=D(preferred=1, max=1)),
+        buttons=[ok_button, cancel_button],
+        with_background=True)
+
+    return _run_dialog(dialog, style, async_=async_)
+
+
+def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
+                 completer=None, password=False, style=None, async_=False):
+    """
+    Display a list box. (Make it a drop-down, someday.)
+    Return the given text, or None when cancelled.
+    """
+    def accept(buf):
+        get_app().layout.focus(ok_button)
+        return True  # Keep text.
+
+    # Keep a copy of the text buffer to outlive
+    textBuffer = '\n'.join(itemList)
+
+    def ok_handler(dummy=None):
+        # Fetch and return the text of the currently selected row. Do not
+        # return the row number because in situations such as file browsing,
+        # the text can change, rendering the row number unreliable.
+        breakpoint()
+        nonlocal textBuffer, selectedItem
+        #doc = get_app().current_buffer.document
+        #doc = textBuffer.document
+        #pos = doc.cursor_position
+        #txt = doc.text[pos + doc.get_start_of_line_position()
+        #        : pos + doc.get_end_of_line_position()].rstrip()
+        txt = textBuffer.split()[selectedItem]
+        get_app().exit(result=txt)
+
+    ok_button = MiniButton(text=ok_text, handler=ok_handler)
+    cancel_button = MiniButton(text=cancel_text, handler=_return_none)
+
+    selectedItem = 0
+    itemCount = len(itemList)
+    listboxHeight = 5
+
+    textfield = TextArea(
+        text=textBuffer,
+        read_only=True,
+        focusable=True,
+        height=listboxHeight,
+        password=password,
+        completer=completer,
+        #accept_handler is not invoked, probably because we are read_only.
+        #Our workaround is to expicitly define an 'enter' handler below.
+        accept_handler=accept
+        )
+
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        #print('    line: ' + str(selectedItem))
+        get_app().layout.focus(ok_button)
+        return True  # Keep text.
+
+    # Disable Ok / Cancel hotkeys within the text area
+    #TODO:Remove the underlines.
+    @kb.add('O')
+    @kb.add('o')
+    @kb.add('C')
+    @kb.add('c')
+    def _(event):
+        pass
+
+    @kb.add('down')
+    def _(event):
+        nonlocal selectedItem, itemCount
+        event.current_buffer.auto_down()    # necessary buffer bookkeeping
+        selectedItem = (selectedItem + 1) % itemCount
+
+    @kb.add('up')
+    def _(event):
+        nonlocal selectedItem, itemCount
+        event.current_buffer.auto_up()
+        selectedItem = (selectedItem - 1) % itemCount
+
+    @kb.add('pagedown')
+    def _(event):
+        nonlocal selectedItem, itemCount, listboxHeight
+        jumpSize = min(listboxHeight-1, itemCount-1-selectedItem)
+        event.current_buffer.auto_down(jumpSize)
+        selectedItem += jumpSize
+
+    @kb.add('pageup')
+    def _(event):
+        nonlocal selectedItem, listboxHeight
+        jumpSize = min(listboxHeight-1, selectedItem)
+        event.current_buffer.auto_up(jumpSize)
+        selectedItem -= jumpSize
+
+    textfield.control.key_bindings = kb
+
+    dialog = MiniDialog(
+        title=title,
+        body=HSplit([
+            Label(text='Please select one of the following:', dont_extend_height=True),
             textfield,
         ], padding=D(preferred=1, max=1)),
         buttons=[ok_button, cancel_button],
