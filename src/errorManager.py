@@ -21,6 +21,7 @@ class ReturnCode(Enum):
     INVALID_QUERY_SYNTAX = 13
     PROMPT_ERROR = 14
     MISSING_PASSWORD = 15
+    ILLEGAL_ARGUMENT = 16
 
 errorMsgDict = {
     0 : '',
@@ -39,6 +40,7 @@ errorMsgDict = {
     13 : 'Query syntax error: {0}, {1}',
     14 : 'Illegal {0} "{1}" in prompt.',
     15 : 'Unable to prompt for password. Please specify it using "-p" option or config file.',
+    16 : 'Illegal argument. {0} is required.',  # This should be specialized to the context
     }
 
 class ErrorManager:
