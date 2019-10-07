@@ -25,7 +25,7 @@ sys.path.append("../util")
 from utilIncludes import MiniCompleter
 from utilIncludes import CommandCompleter
 from utilIncludes import settingOptionsMap
-from utilIncludes import yes_no_dialog, button_dialog, input_dialog
+from utilIncludes import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog
 
 setupPrompt = True
 settingsChanged = False
@@ -209,8 +209,7 @@ def dispatchCommand(cmd, oldTableName):
             return ReturnCode.USER_EXIT, oldTableName
         elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
             # Allow the user to fix the connection settings and keep going.
-            #TODO This requires the ability to change the settings. One sit8n
-            #TODO is a failed cxn due to bad cxn strings.
+            #TODO One situation is a failed cxn due to bad cxn strings.
             #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
             em.doWarn()
             return ReturnCode.SUCCESS, oldTableName
@@ -276,10 +275,9 @@ def doHelp(argv):
     return ReturnCode.SUCCESS
 
 def doSql(sql):
-    # Most of the classified args should not apply here. The purpose of "sq"
-    # is to allow literal SQL exactly as-is, i.e. no alterations. But we still
-    # need to fall back on the program settings: runMode, display format, ...
-    # So here we clear the options, copy the settings, and then run the query.
+    # Most of the classified args should not apply here. But we still
+    # need to fall back on a few things like runMode, display format, ...
+    # So we clear the options, copy the settings, and then run the query.
     global args, setupPrompt
     args.options.clear()
     args.backfillOptions()
@@ -338,6 +336,11 @@ def doHistory(argv):
     global historyObject
     argc = len(argv)
 
+    if argc > 0 and not argv[0].isdecimal():
+        em.setError(ReturnCode.ILLEGAL_ARGUMENT)
+        doWarn(msg='ERROR: A positive number is required.')
+        return ReturnCode.SUCCESS
+
     l = list(reversed(historyObject.get_strings()))
     available = len(l)
     requested = int(argv[0] if argc > 0 else ms.settings['Settings']['historyLength'])
@@ -361,12 +364,19 @@ def doFormat(argv):
 def doSetDatabase(argv):
     global args, setupPrompt, settingsChanged
 
+    #TODO: Do not allow simple erasure of the db name. Bring up a selection dlg
+    #TODO: offering the option to cancel back to the current name.
+    #TODO: Since the set of DBs is theoretically changeable, use a list box.
     dbName = argv[0] if len(argv) > 0 else ''
-    ms.settings['Settings']['database'] = dbName
+    currDbName = ms.settings['Settings']['database']
+    if dbName == currDbName:
+        doWarn("Database is already " + currDbName + ".")
+        return ReturnCode.SUCCESS
+    currDbName = dbName
     ms.settings['Settings']['table'] = ''
     cfg.changeDatabase(dbName)
     # Run a "use" query to make the change effective
-    #TODO: Does this work ONLY for MYSQL, or for all RDBMS?
+    #TODO: Is this standard SQL?
     queryProcessor(args).process("USE " + dbName)
     args.mainTableName = ''
     # Update the prompt
@@ -378,6 +388,10 @@ def doSetTable(argv):
     global args, setupPrompt, settingsChanged
 
     tableName = argv[0] if len(argv) > 0 else ''
+    currTableName = ms.settings['Settings']['table']
+    if tableName == currTableName:
+        doWarn("Table is already " + currDbName + ".")
+        return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
     cfg.databases[ms.settings['Settings']['database']].changeMainTable(tableName)
     args.mainTableName = tableName
