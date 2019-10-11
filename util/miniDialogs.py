@@ -2,7 +2,7 @@
 Collection of reusable components for building full screen applications.
 """
 from __future__ import unicode_literals
-from prompt_toolkit.filters import has_completions, has_focus
+from prompt_toolkit.filters import has_completions, has_focus, Condition, is_true
 from prompt_toolkit.formatted_text import is_formatted_text
 from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindings
@@ -10,6 +10,11 @@ from prompt_toolkit.layout.containers import VSplit, HSplit, DynamicContainer, W
 from prompt_toolkit.layout.dimension import Dimension as D
 
 import functools
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
+from prompt_toolkit.completion import DynamicCompleter
+from prompt_toolkit.auto_suggest import DynamicAutoSuggest
+from prompt_toolkit.layout.margins import ScrollbarMargin, NumberedMargin
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.eventloop import run_in_executor
@@ -23,6 +28,7 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.mouse_events import MouseEventType
 
 __all__ = [
+    'MiniListBox',
     'MiniButton',
     'MiniDialog',
     'yes_no_dialog',
@@ -32,6 +38,263 @@ __all__ = [
     'radiolist_dialog',
     'progress_dialog',
 ]
+
+class MiniListBox(object):
+    """
+    Based on prompt-toolkit's TextArea, this class uses a FormattedTextControl
+    instead of a BufferControl to enable a specific kind of formatting/
+    stylization of the text to implement "highlighting" of the user selection
+    as in normal list boxes.
+
+    This implementation borrows class Button`s idea of "trading" in flat
+    text while internally stylizing it before passing it to the control.
+
+    This is a higher level abstraction on top of several other classes with
+    sane defaults.
+
+    Buffer attributes:
+
+    :param itemList: The choices as a list of strings.
+    :param multiline: If True, allow multiline input.
+    :param completer: :class:`~prompt_toolkit.completion.Completer` instance
+        for auto completion.
+    :param complete_while_typing: Boolean.
+    :param accept_handler: Called when `Enter` is pressed (This should be a
+        callable that takes a buffer as input).
+    :param history: :class:`~prompt_toolkit.history.History` instance.
+    :param auto_suggest: :class:`~prompt_toolkit.auto_suggest.AutoSuggest`
+        instance for input suggestions.
+
+    FormattedTextControl attributes:
+
+    :param focusable: When `True`, allow this widget to receive the focus.
+
+    Window attributes:
+
+    :param lexer: :class:`~prompt_toolkit.lexers.Lexer` instance for syntax
+        highlighting.
+    :param wrap_lines: When `True`, don't scroll horizontally, but wrap lines.
+    :param width: Window width. (:class:`~prompt_toolkit.layout.Dimension` object.)
+    :param height: Window height. (:class:`~prompt_toolkit.layout.Dimension` object.)
+    :param scrollbar: When `True`, display a scroll bar.
+    :param style: A style string.
+    :param dont_extend_width: When `True`, don't take up more width then the
+                              preferred width reported by the control.
+    :param dont_extend_height: When `True`, don't take up more width then the
+                               preferred height reported by the control.
+    :param get_line_prefix: None or a callable that returns formatted text to
+        be inserted before a line. It takes a line number (int) and a
+        wrap_count and returns formatted text. This can be used for
+        implementation of line continuations, things like Vim "breakindent" and
+        so on.
+
+    Other attributes:
+
+    :param search_field: An optional `SearchToolbar` object.
+    """
+    def __init__(self, itemList=None, multiline=True, password=False,
+                 lexer=None, auto_suggest=None, completer=None,
+                 complete_while_typing=True, accept_handler=None, history=None,
+                 focusable=True, wrap_lines=True,
+                 read_only=False, width=None, height=None,
+                 dont_extend_height=False, dont_extend_width=False,
+                 line_numbers=False, get_line_prefix=None, scrollbar=False,
+                 style='', search_field=None, preview_search=True, prompt=''):
+        assert isinstance(itemList, list)
+        assert search_field is None or isinstance(search_field, SearchToolbar)
+
+        if search_field is None:
+            search_control = None
+        elif isinstance(search_field, SearchToolbar):
+            search_control = search_field.control
+
+        # Writeable attributes.
+        self.completer = completer
+        self.complete_while_typing = complete_while_typing
+        self.lexer = lexer
+        self.auto_suggest = auto_suggest
+        self.read_only = read_only
+        self.wrap_lines = wrap_lines
+        self.itemList = itemList
+
+        text = '\n'.join(itemList)
+        self.buffer = Buffer(
+            document=Document(text, 0),
+            multiline=multiline,
+            read_only=Condition(lambda: is_true(self.read_only)),
+            completer=DynamicCompleter(lambda: self.completer),
+            complete_while_typing=Condition(
+                lambda: is_true(self.complete_while_typing)),
+            auto_suggest=DynamicAutoSuggest(lambda: self.auto_suggest),
+            accept_handler=accept_handler,
+            history=history)
+
+        self.control = FormattedTextControl(
+                self._get_text_fragments,
+                key_bindings=self._get_key_bindings(),
+                focusable=True)
+
+        if multiline:
+            if scrollbar:
+                right_margins = [ScrollbarMargin(display_arrows=True)]
+            else:
+                right_margins = []
+            if line_numbers:
+                left_margins = [NumberedMargin()]
+            else:
+                left_margins = []
+        else:
+            height = D.exact(1)
+            left_margins = []
+            right_margins = []
+
+        style = 'class:text-area ' + style
+
+        self.window = Window(
+            height=height,
+            width=width,
+            dont_extend_height=dont_extend_height,
+            dont_extend_width=dont_extend_width,
+            content=self.control,
+            style=style,
+            wrap_lines=Condition(lambda: is_true(self.wrap_lines)),
+            left_margins=left_margins,
+            right_margins=right_margins,
+            get_line_prefix=get_line_prefix)
+
+        itemCount = len(self.itemList)
+        self.selectedItem = 0
+        kb = KeyBindings()
+
+        # Without this, 'enter' does nothing! So what's the accept_handler for?
+        @kb.add('enter')
+        def _(event):
+            #Hack: caller sets ok_button so the following will work
+            if self.ok_button:
+                get_app().layout.focus(self.ok_button)
+            return True  # Keep text.
+
+        # Disable Ok / Cancel hotkeys within the text area
+        #TODO:Remove the formatted underlines.
+        @kb.add('O')
+        @kb.add('o')
+        @kb.add('C')
+        @kb.add('c')
+        def _(event):
+            pass
+
+        @kb.add('down')
+        def _(event):
+            nonlocal itemCount
+            if self.selectedItem == itemCount-1:
+                return
+            else:
+                self.selectedItem = (self.selectedItem + 1) % itemCount
+
+        @kb.add('up')
+        def _(event):
+            nonlocal itemCount
+            if self.selectedItem == 0:
+                return
+            else:
+                self.selectedItem = (self.selectedItem - 1) % itemCount
+
+        @kb.add('pagedown')
+        def _(event):
+            nonlocal itemCount, height
+            jumpSize = min(height-1, itemCount-1-self.selectedItem)
+            event.current_buffer.auto_down(jumpSize)
+            self.selectedItem = (self.selectedItem + jumpSize) % itemCount
+
+        @kb.add('pageup')
+        def _(event):
+            nonlocal itemCount, height
+            jumpSize = min(height-1, self.selectedItem)
+            event.current_buffer.auto_up(jumpSize)
+            self.selectedItem = (self.selectedItem - jumpSize) % itemCount
+
+        self.control.key_bindings = kb
+
+    def _get_text_fragments(self):
+        item = self.selectedItem
+        items = self.itemList
+        text = self.text
+
+        def handler(mouse_event):
+            if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                self.handler()
+
+        if item == len(items)-1:  # last item
+            idx = text.rindex(items[item])
+            return [
+                ('', text[:idx], handler),
+                ('[SetCursorPosition]', ''),
+                ('fg:white bg:blue', text[idx:], handler),
+               ]
+        elif item > 0:
+            searchString = '\n{}\n'.format(items[item])
+            startIdx = text.index(searchString) + 1  # skip leading NL
+            endIdx = text.find('\n', startIdx) + 1  # enclose next NL
+            return [
+                ('', text[:startIdx], handler),
+                ('[SetCursorPosition]', ''),
+                ('fg:white bg:blue', text[startIdx:endIdx], handler),
+                ('', text[endIdx:], handler),
+               ]
+        else:    # item == 0
+            endIdx = text.find('\n') + 1
+            return [
+                ('[SetCursorPosition]', ''),
+                ('fg:white bg:blue', text[:endIdx], handler),
+                ('', text[endIdx:], handler),
+               ]
+
+    def _get_key_bindings(self):
+        kb = KeyBindings()
+
+        @kb.add(' ')
+        @kb.add('enter')
+        def _(event):
+            if self.handler is not None:
+                self.handler()
+
+        return kb
+
+    @property
+    def text(self):
+        """
+        The `Buffer` text.
+        """
+        return self.buffer.text
+
+    @text.setter
+    def text(self, value):
+        self.buffer.set_document(Document(value, 0), bypass_readonly=True)
+
+    @property
+    def document(self):
+        """
+        The `Buffer` document (text + cursor position).
+        """
+        return self.buffer.document
+
+    @document.setter
+    def document(self, value):
+        self.buffer.document = value
+
+    @property
+    def accept_handler(self):
+        """
+        The accept handler. Called when the user accepts the input.
+        """
+        return self.buffer.accept_handler
+
+    @accept_handler.setter
+    def accept_handler(self, value):
+        self.buffer.accept_handler = value
+
+    def __pt_container__(self):
+        return self.window
 
 
 class MiniButton(object):
@@ -288,86 +551,29 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
         get_app().layout.focus(ok_button)
         return True  # Keep text.
 
-    # Keep a copy of the text buffer to outlive
     textBuffer = '\n'.join(itemList)
+    listboxHeight = 5
+
+    textfield = MiniListBox(
+            itemList=itemList,
+            read_only=True,
+            focusable=True,
+            height=listboxHeight,
+            completer=completer,
+            accept_handler=accept)
 
     def ok_handler(dummy=None):
         # Fetch and return the text of the currently selected row. Do not
         # return the row number because in situations such as file browsing,
         # the text can change, rendering the row number unreliable.
-        breakpoint()
-        nonlocal textBuffer, selectedItem
-        #doc = get_app().current_buffer.document
-        #doc = textBuffer.document
-        #pos = doc.cursor_position
-        #txt = doc.text[pos + doc.get_start_of_line_position()
-        #        : pos + doc.get_end_of_line_position()].rstrip()
-        txt = textBuffer.split()[selectedItem]
+        nonlocal textBuffer, textfield
+        txt = textBuffer.split()[textfield.selectedItem]
         get_app().exit(result=txt)
 
     ok_button = MiniButton(text=ok_text, handler=ok_handler)
     cancel_button = MiniButton(text=cancel_text, handler=_return_none)
 
-    selectedItem = 0
-    itemCount = len(itemList)
-    listboxHeight = 5
-
-    textfield = TextArea(
-        text=textBuffer,
-        read_only=True,
-        focusable=True,
-        height=listboxHeight,
-        password=password,
-        completer=completer,
-        #accept_handler is not invoked, probably because we are read_only.
-        #Our workaround is to expicitly define an 'enter' handler below.
-        accept_handler=accept
-        )
-
-    kb = KeyBindings()
-
-    @kb.add('enter')
-    def _(event):
-        #print('    line: ' + str(selectedItem))
-        get_app().layout.focus(ok_button)
-        return True  # Keep text.
-
-    # Disable Ok / Cancel hotkeys within the text area
-    #TODO:Remove the underlines.
-    @kb.add('O')
-    @kb.add('o')
-    @kb.add('C')
-    @kb.add('c')
-    def _(event):
-        pass
-
-    @kb.add('down')
-    def _(event):
-        nonlocal selectedItem, itemCount
-        event.current_buffer.auto_down()    # necessary buffer bookkeeping
-        selectedItem = (selectedItem + 1) % itemCount
-
-    @kb.add('up')
-    def _(event):
-        nonlocal selectedItem, itemCount
-        event.current_buffer.auto_up()
-        selectedItem = (selectedItem - 1) % itemCount
-
-    @kb.add('pagedown')
-    def _(event):
-        nonlocal selectedItem, itemCount, listboxHeight
-        jumpSize = min(listboxHeight-1, itemCount-1-selectedItem)
-        event.current_buffer.auto_down(jumpSize)
-        selectedItem += jumpSize
-
-    @kb.add('pageup')
-    def _(event):
-        nonlocal selectedItem, listboxHeight
-        jumpSize = min(listboxHeight-1, selectedItem)
-        event.current_buffer.auto_up(jumpSize)
-        selectedItem -= jumpSize
-
-    textfield.control.key_bindings = kb
+    textfield.ok_button = ok_button
 
     dialog = MiniDialog(
         title=title,
