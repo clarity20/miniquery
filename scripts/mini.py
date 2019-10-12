@@ -338,7 +338,7 @@ def doHistory(argv):
 
     if argc > 0 and not argv[0].isdecimal():
         em.setError(ReturnCode.ILLEGAL_ARGUMENT)
-        doWarn(msg='ERROR: A positive number is required.')
+        em.doWarn(msg='ERROR: A positive number is required.')
         return ReturnCode.SUCCESS
 
     l = list(reversed(historyObject.get_strings()))
@@ -364,13 +364,20 @@ def doFormat(argv):
 def doSetDatabase(argv):
     global args, setupPrompt, settingsChanged
 
-    #TODO: Do not allow simple erasure of the db name. Bring up a selection dlg
-    #TODO: offering the option to cancel back to the current name.
-    #TODO: Since the set of DBs is theoretically changeable, use a list box.
-    dbName = argv[0] if len(argv) > 0 else ''
+    # Do not allow simple erasure of the db name. Bring up a selection dlg
+    # offering the option to cancel back to the current name. Since the set
+    # of DBs is (only) changeable by CREATE DATABASE, use a list box.
+    if len(argv) == 0:
+        dbList = list(iter(cfg.databases))
+        dbName = MiniListBoxDialog(title='Select a database', itemList=dbList)
+        if not dbName:
+            return ReturnCode.SUCCESS
+    else:
+        dbName = argv[0] if len(argv) > 0 else ''
+
     currDbName = ms.settings['Settings']['database']
     if dbName == currDbName:
-        doWarn("Database is already " + currDbName + ".")
+        em.doWarn("Database is already " + currDbName + ".")
         return ReturnCode.SUCCESS
     currDbName = dbName
     ms.settings['Settings']['table'] = ''
@@ -387,10 +394,18 @@ def doSetDatabase(argv):
 def doSetTable(argv):
     global args, setupPrompt, settingsChanged
 
-    tableName = argv[0] if len(argv) > 0 else ''
+    # Do not allow simple erasure of the table name. See doSetDatabase().
+    if len(argv) == 0:
+        tableList = cfg.databases[ms.settings['Settings']['database']].tableNames
+        tableName = MiniListBoxDialog(title='Select a table', itemList=tableList)
+        if not tableName:
+            return ReturnCode.SUCCESS
+    else:
+        tableName = argv[0]
+
     currTableName = ms.settings['Settings']['table']
     if tableName == currTableName:
-        doWarn("Table is already " + currDbName + ".")
+        em.doWarn("Table is already " + currDbName + ".")
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
     cfg.databases[ms.settings['Settings']['database']].changeMainTable(tableName)
