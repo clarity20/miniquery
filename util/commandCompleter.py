@@ -2,7 +2,8 @@ import re
 import sys
 
 from six import string_types
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import Completer, PathCompleter, Completion, CompleteEvent
+from prompt_toolkit.document import Document
 
 sys.path.append("../src/")
 from configManager import masterDataConfig; cfg = masterDataConfig
@@ -14,7 +15,17 @@ __all__ = [
 
 class CommandCompleter(Completer):
     """
-    Subsequence autocompletion on a list of words.
+    Context-sensitive subsequence completion of a word against a list of words:
+
+    - Line-leading words prefixed with the 'leader' are assumed to be MINIQUERY
+    system commands and are completed against a list of all MINIQUERY commands.
+    - Line-leading words NOT prefixed with the 'leader' are assumed to be
+    MINIQUERY queries, and completion is not attempted.
+    - Words following commands are assumed to be first arguments and are
+    expanded against a list of words proper to that command.
+
+    (Distantly) adapted from the prompt-toolkit's WordCompleter. Not all of the
+    parameters below are meaningful.
 
     :param words: List of words or callable that returns a list of words.
     :param ignore_case: If True, case-insensitive completion.
@@ -59,8 +70,8 @@ class CommandCompleter(Completer):
         from miniGlobals import commandList, settingOptionsMap
         if ' ' in text:
             # The word is an argument. The candidate list depends on the command
-            word_before_cursor = document.get_word_before_cursor(WORD=self.WORD)
-            cmd, x, y = text.partition(' ')
+            #word_before_cursor = document.get_word_before_cursor(WORD=self.WORD)
+            cmd, x, word_before_cursor = text.partition(' ')
             try:
                 if cmd in ['geta', 'unseta']:          # user chooses an alias
                     words = list(ms.settings['Aliases'])
@@ -76,6 +87,10 @@ class CommandCompleter(Completer):
                             + list(ms.settings['ConnectionString'][defType])
                     if cmd == 'get':
                         words.append('*')
+                elif cmd in ['source', 'save']:
+                    completions = list(PathCompleter().get_completions(
+                                Document(word_before_cursor, len(word_before_cursor)), CompleteEvent()))
+                    words = [c.display[0][1] for c in completions]
                 elif cmd == 'db':
                     words = [db for db in cfg.databases.keys()]
                 elif cmd == 'table':
