@@ -9,6 +9,7 @@ from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindi
 from prompt_toolkit.layout.containers import VSplit, HSplit, DynamicContainer, Window, WindowAlign
 from prompt_toolkit.layout.dimension import Dimension as D
 
+import os
 import functools
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
@@ -552,7 +553,9 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
         return True  # Keep text.
 
     textBuffer = '\n'.join(itemList)
-    listboxHeight = 5
+    # Reserve a suitable amount of vertical space for the list
+    a, screenHeight = os.get_terminal_size()
+    listboxHeight = min(screenHeight - 10, len(itemList))
 
     textfield = MiniListBox(
             itemList=itemList,
