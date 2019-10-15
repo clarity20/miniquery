@@ -8,9 +8,11 @@ from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindings
 from prompt_toolkit.layout.containers import VSplit, HSplit, DynamicContainer, Window, WindowAlign
 from prompt_toolkit.layout.dimension import Dimension as D
+from prompt_toolkit.keys import Keys
 
 import os
 import functools
+from bisect import bisect_left
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.completion import DynamicCompleter
@@ -163,7 +165,7 @@ class MiniListBox(object):
             right_margins=right_margins,
             get_line_prefix=get_line_prefix)
 
-        itemCount = len(self.itemList)
+        self.itemCount = len(self.itemList)
         self.selectedItem = 0
         kb = KeyBindings()
 
@@ -175,44 +177,50 @@ class MiniListBox(object):
                 get_app().layout.focus(self.ok_button)
             return True  # Keep text.
 
-        # Disable Ok / Cancel hotkeys within the text area
-        #TODO:Remove the formatted underlines.
-        @kb.add('O')
-        @kb.add('o')
-        @kb.add('C')
-        @kb.add('c')
+        @kb.add('escape')
         def _(event):
-            pass
+            #Hack: caller sets ok_button so the following will work
+            if self.ok_button:
+                get_app().layout.focus(self.ok_button)
+                get_app().layout.focus_next()
+            return False  # Keep text.
+
+        @kb.add(Keys.Any)
+        def _(event):
+            # Enable letters/numbers as shortcut keys
+            keyPressed = event.key_sequence[0].key.lower()
+            if keyPressed.isalnum():
+                item = self.selectedItem
+                if item < self.itemCount - 1 \
+                   and self.itemList[item+1][0].lower() == keyPressed:
+                    self.selectedItem += 1
+                else:
+                    self.selectedItem = min(self.itemCount-1,
+                            bisect_left(self.itemList, keyPressed))
 
         @kb.add('down')
         def _(event):
-            nonlocal itemCount
-            if self.selectedItem == itemCount-1:
+            if self.selectedItem == self.itemCount-1:
                 return
             else:
-                self.selectedItem = (self.selectedItem + 1) % itemCount
+                self.selectedItem = (self.selectedItem + 1) % self.itemCount
 
         @kb.add('up')
         def _(event):
-            nonlocal itemCount
             if self.selectedItem == 0:
                 return
             else:
-                self.selectedItem = (self.selectedItem - 1) % itemCount
+                self.selectedItem = (self.selectedItem - 1) % self.itemCount
 
         @kb.add('pagedown')
         def _(event):
-            nonlocal itemCount, height
-            jumpSize = min(height-1, itemCount-1-self.selectedItem)
-            event.current_buffer.auto_down(jumpSize)
-            self.selectedItem = (self.selectedItem + jumpSize) % itemCount
+            jumpSize = min(self.window.height-1, self.itemCount-1-self.selectedItem)
+            self.selectedItem = (self.selectedItem + jumpSize) % self.itemCount
 
         @kb.add('pageup')
         def _(event):
-            nonlocal itemCount, height
-            jumpSize = min(height-1, self.selectedItem)
-            event.current_buffer.auto_up(jumpSize)
-            self.selectedItem = (self.selectedItem - jumpSize) % itemCount
+            jumpSize = min(self.window.height-1, self.selectedItem)
+            self.selectedItem = (self.selectedItem - jumpSize) % self.itemCount
 
         self.control.key_bindings = kb
 
@@ -225,7 +233,7 @@ class MiniListBox(object):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.handler()
 
-        if item == len(items)-1:  # last item
+        if item == self.itemCount-1:  # last item
             idx = text.rindex(items[item])
             return [
                 ('', text[:idx], handler),
@@ -385,6 +393,12 @@ class MiniButton(object):
             if self.handler is not None:
                 self.handler()
 
+        # ESC should only actuate buttons mapped to act like cancelers
+        @kb.add('escape')
+        def _(event):
+            if self.handler == _return_none:
+                self.handler()
+
         return kb
 
     def __pt_container__(self):
@@ -422,6 +436,13 @@ class MiniDialog(object):
             buttons_kb.add('left', filter=~first_selected)(focus_previous)
             buttons_kb.add('right', filter=~last_selected)(focus_next)
 
+        # Create a hotkey for every button if so indicated
+        for btn in buttons:
+            if btn.hotkeyIndex >= 0:
+                key = btn.text[btn.hotkeyIndex]
+                buttons_kb.add(key.upper())(btn.handler)
+                buttons_kb.add(key.lower())(btn.handler)
+
         if buttons:
             frame_body = HSplit([
                 # Add optional padding around the body.
@@ -439,13 +460,6 @@ class MiniDialog(object):
         kb = KeyBindings()
         kb.add('tab', filter=~has_completions)(focus_next)
         kb.add('s-tab', filter=~has_completions)(focus_previous)
-
-        # Create a hotkey for every button if so indicated
-        for btn in buttons:
-            if btn.hotkeyIndex >= 0:
-                key = btn.text[btn.hotkeyIndex]
-                kb.add(key.upper())(btn.handler)
-                kb.add(key.lower())(btn.handler)
 
         frame = Shadow(body=Frame(
             title=lambda: self.title,
@@ -552,7 +566,6 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
         get_app().layout.focus(ok_button)
         return True  # Keep text.
 
-    textBuffer = '\n'.join(itemList)
     # Reserve a suitable amount of vertical space for the list
     a, screenHeight = os.get_terminal_size()
     listboxHeight = min(screenHeight - 10, len(itemList))
@@ -569,8 +582,8 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
         # Fetch and return the text of the currently selected row. Do not
         # return the row number because in situations such as file browsing,
         # the text can change, rendering the row number unreliable.
-        nonlocal textBuffer, textfield
-        txt = textBuffer.split()[textfield.selectedItem]
+        nonlocal textfield
+        txt = textfield.itemList[textfield.selectedItem]
         get_app().exit(result=txt)
 
     ok_button = MiniButton(text=ok_text, handler=ok_handler)
