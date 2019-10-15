@@ -22,6 +22,7 @@ class ReturnCode(Enum):
     PROMPT_ERROR = 14
     MISSING_PASSWORD = 15
     ILLEGAL_ARGUMENT = 16
+    Clarification = 17
 
 errorMsgDict = {
     0 : '',
@@ -41,6 +42,7 @@ errorMsgDict = {
     14 : 'Illegal {0} "{1}" in prompt.',
     15 : 'Unable to prompt for password. Please specify it using "-p" option or config file.',
     16 : 'Illegal argument. {0} is required.',  # This should be specialized to the context
+    17 : '' # Reserved for mere warnings
     }
 
 class ErrorManager:
@@ -85,7 +87,8 @@ class ErrorManager:
     # fix things up instead of totally exiting the program
     def doWarn(self, msg=None):
         if self.errOutputStream.isatty() and self.returnCode.value:
-            print_formatted_text(FormattedText([('red', msg or self.errMsg)]),
+            color = 'yellow' if self.returnCode == ReturnCode.Clarification else 'red'
+            print_formatted_text(FormattedText([(color, msg or self.errMsg)]),
                                 file=self.errOutputStream)
         else:
             print(msg if msg else self.errMsg, file=self.errOutputStream)

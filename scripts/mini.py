@@ -377,6 +377,7 @@ def doSetDatabase(argv):
 
     currDbName = ms.settings['Settings']['database']
     if dbName == currDbName:
+        em.setError(ReturnCode.Clarification)
         em.doWarn("Database is already " + currDbName + ".")
         return ReturnCode.SUCCESS
     currDbName = dbName
@@ -405,7 +406,8 @@ def doSetTable(argv):
 
     currTableName = ms.settings['Settings']['table']
     if tableName == currTableName:
-        em.doWarn("Table is already " + currDbName + ".")
+        em.setError(ReturnCode.Clarification)
+        em.doWarn("Table is already " + currTableName + ".")
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
     cfg.databases[ms.settings['Settings']['database']].changeMainTable(tableName)
@@ -429,8 +431,9 @@ def doSource(argv):
     # Source a command file, a lot like input redirection
     #TODO: Consider a "file open" dialog, but it might be hard since the toolkit doesn't have one
     if argc < 1:
-        print('A filename is required.')
-        return
+        em.setError(ReturnCode.Clarification)
+        doWarn('Source command: A filename is required.')
+        return ReturnCode.SUCCESS
 
     print('Sourcing ' + argv[0])
     try:
