@@ -15,7 +15,7 @@ import functools
 from bisect import bisect_left
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
-from prompt_toolkit.completion import DynamicCompleter
+from prompt_toolkit.completion import DynamicCompleter, PathCompleter, CompleteEvent
 from prompt_toolkit.auto_suggest import DynamicAutoSuggest
 from prompt_toolkit.layout.margins import ScrollbarMargin, NumberedMargin
 from prompt_toolkit.application import Application
@@ -25,6 +25,7 @@ from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.widgets import ProgressBar, Label, Box, TextArea, RadioList, Shadow, Frame
 
+import pathlib
 import six
 import re
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -34,6 +35,7 @@ __all__ = [
     'MiniListBox',
     'MiniButton',
     'MiniDialog',
+    'MiniFileDialog',
     'yes_no_dialog',
     'button_dialog',
     'input_dialog',
@@ -59,6 +61,8 @@ class MiniListBox(object):
 
     :param itemList: The choices as a list of strings.
     :param multiline: If True, allow multiline input.
+    :param pathBox: If set, indicates this is an "Open file" list box and
+         points to the corresponding file/directory name TextArea object
     :param completer: :class:`~prompt_toolkit.completion.Completer` instance
         for auto completion.
     :param complete_while_typing: Boolean.
@@ -98,7 +102,7 @@ class MiniListBox(object):
     def __init__(self, itemList=None, multiline=True, password=False,
                  lexer=None, auto_suggest=None, completer=None,
                  complete_while_typing=True, accept_handler=None, history=None,
-                 focusable=True, wrap_lines=True,
+                 focusable=True, wrap_lines=True, pathBox=None,
                  read_only=False, width=None, height=None,
                  dont_extend_height=False, dont_extend_width=False,
                  line_numbers=False, get_line_prefix=None, scrollbar=False,
@@ -169,17 +173,38 @@ class MiniListBox(object):
         self.selectedItem = 0
         kb = KeyBindings()
 
-        # Without this, 'enter' does nothing! So what's the accept_handler for?
+        self.pathBox = pathBox
+
         @kb.add('enter')
         def _(event):
-            #Hack: caller sets ok_button so the following will work
+            #Hack: Have caller set ok_button so the following will work
             if self.ok_button:
-                get_app().layout.focus(self.ok_button)
+                # For file-selection dlgs, update the widgets w.r.t. each other
+                if self.pathBox:
+                    filename = self.itemList[self.selectedItem]
+                    path = pathlib.Path(self.pathBox.text)
+                    # If path box is stale -- user made a choice but wants to change it -- refresh.
+                    if not path.is_dir():
+                        path = path.parent
+                    fullpath = path / filename
+                    self.pathBox.text = str(fullpath.resolve())
+                    if fullpath.is_dir():
+                        self.itemList.clear()
+                        self.itemList = ['../'] \
+                                + [p.name+'/' if p.is_dir() else p.name for p in fullpath.iterdir()]
+                        self.itemList = sorted(self.itemList)
+                        self.itemCount = len(self.itemList)
+                        self.selectedItem = 0
+                        self.text = '\n'.join(self.itemList)
+                    else:
+                        get_app().layout.focus(self.ok_button)
+                else:
+                    get_app().layout.focus(self.ok_button)
             return True  # Keep text.
 
         @kb.add('escape')
         def _(event):
-            #Hack: caller sets ok_button so the following will work
+            #Hack: Have caller set ok_button so the following will work
             if self.ok_button:
                 get_app().layout.focus(self.ok_button)
                 get_app().layout.focus_next()
@@ -233,12 +258,15 @@ class MiniListBox(object):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.handler()
 
+        highlightScheme = 'fg:white bg:blue' if get_app().layout. \
+            has_focus(self.control) else 'fg:white bg:gray'
+
         if item == self.itemCount-1:  # last item
             idx = text.rindex(items[item])
             return [
                 ('', text[:idx], handler),
                 ('[SetCursorPosition]', ''),
-                ('fg:white bg:blue', text[idx:], handler),
+                (highlightScheme, text[idx:], handler),
                ]
         elif item > 0:
             searchString = '\n{}\n'.format(items[item])
@@ -247,14 +275,14 @@ class MiniListBox(object):
             return [
                 ('', text[:startIdx], handler),
                 ('[SetCursorPosition]', ''),
-                ('fg:white bg:blue', text[startIdx:endIdx], handler),
+                (highlightScheme, text[startIdx:endIdx], handler),
                 ('', text[endIdx:], handler),
                ]
         else:    # item == 0
             endIdx = text.find('\n') + 1
             return [
                 ('[SetCursorPosition]', ''),
-                ('fg:white bg:blue', text[:endIdx], handler),
+                (highlightScheme, text[:endIdx], handler),
                 ('', text[endIdx:], handler),
                ]
 
@@ -570,6 +598,8 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
     a, screenHeight = os.get_terminal_size()
     listboxHeight = min(screenHeight - 10, len(itemList))
 
+    itemList = sorted(itemList)
+
     textfield = MiniListBox(
             itemList=itemList,
             read_only=True,
@@ -579,12 +609,7 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
             accept_handler=accept)
 
     def ok_handler(dummy=None):
-        # Fetch and return the text of the currently selected row. Do not
-        # return the row number because in situations such as file browsing,
-        # the text can change, rendering the row number unreliable.
-        nonlocal textfield
-        txt = textfield.itemList[textfield.selectedItem]
-        get_app().exit(result=txt)
+        get_app().exit(result=textfield.itemList[textfield.selectedItem])
 
     ok_button = MiniButton(text=ok_text, handler=ok_handler)
     cancel_button = MiniButton(text=cancel_text, handler=_return_none)
@@ -596,6 +621,65 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
         body=HSplit([
             Label(text='Please select one of the following:', dont_extend_height=True),
             textfield,
+        ], padding=D(preferred=1, max=1)),
+        buttons=[ok_button, cancel_button],
+        with_background=True)
+
+    return _run_dialog(dialog, style, async_=async_)
+
+
+def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
+                 completer=None, password=False, style=None, async_=False):
+    """
+    Display a file selection list box.
+    Return the given text, or None when cancelled.
+    """
+    def accept(buf):
+        get_app().layout.focus(ok_button)
+        return True  # Keep text.
+
+    if not filePath.endswith('/'):
+        filePath += '/'
+    completions = list(PathCompleter().get_completions(
+                Document(filePath, len(filePath)), CompleteEvent()))
+    itemList = ['../'] + [c.display[0][1] for c in completions]
+
+    # Reserve a suitable amount of vertical space for the list
+    a, screenHeight = os.get_terminal_size()
+    listboxHeight = min(screenHeight - 10, len(itemList))
+
+    pathBox = TextArea(
+        text=filePath,
+        read_only=True,
+        height=1,
+        multiline=False,
+        password=password,
+        completer=completer,
+        accept_handler=accept)
+
+    listBox = MiniListBox(
+            itemList=itemList,
+            pathBox=pathBox,
+            read_only=True,
+            focusable=True,
+            height=listboxHeight,
+            completer=completer,
+            accept_handler=accept)
+
+    def ok_handler(dummy=None):
+        get_app().exit(result=pathBox.text)
+
+    ok_button = MiniButton(text=ok_text, handler=ok_handler)
+    cancel_button = MiniButton(text=cancel_text, handler=_return_none)
+
+    listBox.ok_button = ok_button
+
+    dialog = MiniDialog(
+        title=title,
+        body=HSplit([
+            Label(text='Please navigate to the file of your choice:', dont_extend_height=True),
+            pathBox,
+            listBox,
         ], padding=D(preferred=1, max=1)),
         buttons=[ok_button, cancel_button],
         with_background=True)

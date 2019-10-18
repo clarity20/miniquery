@@ -25,7 +25,7 @@ sys.path.append("../util")
 from utilIncludes import MiniCompleter
 from utilIncludes import CommandCompleter
 from utilIncludes import settingOptionsMap
-from utilIncludes import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog
+from utilIncludes import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog, MiniFileDialog
 
 setupPrompt = True
 settingsChanged = False
@@ -428,23 +428,22 @@ def doClearTable(argv):
 def doSource(argv):
     argc = len(argv)
 
-    # Source a command file, a lot like input redirection
-    #TODO: Consider a "file open" dialog, but it might be hard since the toolkit doesn't have one
-    if argc < 1:
-        em.setError(ReturnCode.Clarification)
-        doWarn('Source command: A filename is required.')
+    # Source a command file
+    choice = MiniFileDialog('Open File', os.getcwd()) if argc<1 else argv[0]
+    if not choice:
         return ReturnCode.SUCCESS
 
-    print('Sourcing ' + argv[0])
+    print('Sourcing ' + choice)
     try:
-        with open(argv[0], 'r') as sourceFp:
+        with open(choice, 'r') as sourceFp:
             oldTableName = ''
             for line in sourceFp:
                 retValue, oldTableName = dispatchCommand(line, oldTableName)
                 if retValue != ReturnCode.SUCCESS:
                     em.doWarn()
+                    break
     except FileNotFoundError:
-        print('Unable to open file ' + argv[0])
+        print('Unable to open file ' + choice)
 
     return ReturnCode.SUCCESS
 
