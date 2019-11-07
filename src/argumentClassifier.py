@@ -24,6 +24,14 @@ class argumentClassifier:
         self.options[setTo] = None
 
     def classify(self, argList):
+        '''
+        Classify the command arguments as program options; the main table name;
+        or WHERE, UPDATE, or SELECT-clause particles.
+
+        This functionality is needed upon program invocation and also every time a
+        query is run in the main REPL loop, so it will be called in several places.
+        '''
+
         # Initialize the table name now if the data is available.
         # This way, the first-argument, per-query table naming
         # will only be in effect when there is no anchor table.
