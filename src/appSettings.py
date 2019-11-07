@@ -10,14 +10,13 @@ fakePass = '-1.a###0q'
 
 class appSettings():
     # The global program settings are stored in $MINI_CONFIG/mini.cfg.
-    # They can be customized at the user level with $HOME/.mini.rc.
+    # They can be customized at the user level with $HOME/.minirc.
 
     def __init__(self):
         self.settings = None
 
-    def loadSettings(self):
+    def loadSettings(self, userSettingsFile):
         # Load the settings from the user-specific file if it is available.
-        userSettingsFile = os.path.join(env.HOME, '.mini.rc')
         if os.path.isfile(userSettingsFile):
             self.settings = ConfigObj(userSettingsFile)
             return ReturnCode.SUCCESS

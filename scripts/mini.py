@@ -30,6 +30,7 @@ from utilIncludes import yes_no_dialog, button_dialog, input_dialog, MiniListBox
 setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
+userConfigFile = ''
 args = argumentClassifier()
 
 #TODO non-writeable hist file gives an error!
@@ -37,7 +38,7 @@ historyObject = None
 
 def main():
     global args, setupPrompt
-    global historyObject
+    global historyObject, userConfigFile
     global continuer, delimiter, endlineProtocol
 
     if '-h' in sys.argv or '--help' in sys.argv:
@@ -47,7 +48,13 @@ def main():
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
-    if ms.loadSettings() == ReturnCode.SUCCESS:
+    # Load the user settings from the default file or a custom file
+    userConfigFile = os.path.join(env.HOME, '.minirc')
+    for arg in sys.argv:
+        if arg.startswith('-') and re.match('[-]+c(fg)?=', arg):
+            userConfigFile = arg.split('=')[1]
+            break
+    if ms.loadSettings(userConfigFile) == ReturnCode.SUCCESS:
         env.setDatabaseName(ms.settings['Settings']['database'])
     else:
         em.doExit()
@@ -298,19 +305,25 @@ def doSql(sql):
     return ReturnCode.SUCCESS
 
 def doQuit(argv):
-    global settingsChanged
+    global settingsChanged, userConfigFile
 
     if settingsChanged:
         choice = button_dialog(title='Save before quitting?',
                 text='Save changes to your MINIQUERY settings before quitting?',
                 buttons=[('Yes',True), ('No',False), ('Cancel',None)])
-        if choice:
-            ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
+        if choice:     # User pressed Yes
+            choice = MiniFileDialog('Save Settings File', userConfigFile,
+                    can_create_new=True)
+            if not choice:
+                return ReturnCode.SUCCESS
+            userConfigFile = choice
+            ms.settings.filename = userConfigFile
             ms.settings.write()
+            settingsChanged = False
             return em.setError(ReturnCode.USER_EXIT)
-        elif choice == None:
+        elif choice == None:     # User pressed Cancel
             return ReturnCode.SUCCESS
-        elif choice == False:
+        elif choice == False:     # User pressed No
             return em.setError(ReturnCode.USER_EXIT)
     else:
         if yes_no_dialog(title='Quit MINIQUERY',
@@ -319,17 +332,26 @@ def doQuit(argv):
         return ReturnCode.SUCCESS
 
 def doSave(argv):
-    global settingsChanged
+    global settingsChanged, userConfigFile
+    argc = len(argv)
 
     if settingsChanged:
         # Save program settings, variables and aliases
-        if yes_no_dialog(title='Confirm save',
-                text='Save changes to your MINIQUERY settings?'):
-            ms.settings.filename = os.path.join(env.HOME, '.mini.rc')
+        if sys.stdout.isatty():
+            choice = MiniFileDialog('Save Settings File', userConfigFile,
+                    can_create_new=True) if argc<1 else argv[0]
+            if not choice:
+                return ReturnCode.SUCCESS
+        else:
+            choice = argv[0] if argc>=1 else userConfigFile
+
+        if choice:
+            userConfigFile = choice
+            ms.settings.filename = userConfigFile
             ms.settings.write()
             settingsChanged = False
     else:
-        print('No unsaved changes.')
+        em.doWarn(msg='No unsaved changes.')
     return ReturnCode.SUCCESS
 
 def doHistory(argv):
@@ -429,13 +451,13 @@ def doSource(argv):
     argc = len(argv)
 
     # Source a command file
-    choice = MiniFileDialog('Open File', os.getcwd()) if argc<1 else argv[0]
-    if not choice:
+    fileName = MiniFileDialog('Open File', os.getcwd()) if argc<1 else argv[0]
+    if not fileName:
         return ReturnCode.SUCCESS
 
-    print('Sourcing ' + choice)
+    print('Sourcing ' + fileName)
     try:
-        with open(choice, 'r') as sourceFp:
+        with open(fileName, 'r') as sourceFp:
             oldTableName = ''
             for line in sourceFp:
                 retValue, oldTableName = dispatchCommand(line, oldTableName)
