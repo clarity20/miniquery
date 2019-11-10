@@ -105,7 +105,7 @@ class MiniListBox(object):
                  complete_while_typing=True, accept_handler=None, history=None,
                  focusable=True, wrap_lines=True, pathBox=None, is_file_type=False,
                  read_only=False, width=None, height=None, selected_item=0,
-                 dont_extend_height=False, dont_extend_width=False,
+                 dont_extend_height=False, dont_extend_width=False, sortKeys = [],
                  line_numbers=False, get_line_prefix=None, scrollbar=False,
                  style='', search_field=None, preview_search=True, prompt=''):
         assert isinstance(itemList, list)
@@ -124,6 +124,7 @@ class MiniListBox(object):
         self.read_only = read_only
         self.wrap_lines = wrap_lines
         self.itemList = itemList
+        self.sortKeys = sortKeys
         self.is_file_type = is_file_type
 
         text = '\n'.join(itemList)
@@ -211,7 +212,7 @@ class MiniListBox(object):
 
                         # Fetch the basename and the directory
                         filename = self.itemList[self.selectedItem]
-                        path = pathlib.Path(pathBox.itemList[0])  #text[0][1])
+                        path = pathlib.Path(pathBox.itemList[0])
 
                         # If the user moves to the ListBox after choosing a file
                         # (not a directory!), the pathBox needs to be cleaned of
@@ -229,10 +230,10 @@ class MiniListBox(object):
 
                     # If the user chose a directory, list its contents
                     if fullpath.is_dir():
-                        self.itemList.clear()
                         self.itemList = ['..' + os.sep] \
-                                + [p.name + os.sep if p.is_dir() else p.name for p in fullpath.iterdir()]
-                        self.itemList.sort()
+                                + ['{}{}'.format(p.name, os.sep) if p.is_dir() else p.name for p in fullpath.iterdir()]
+                        self.itemList.sort(key = lambda x: x.lower())
+                        self.sortKeys = [x.lower() for x in self.itemList]
                         self.itemCount = len(self.itemList)
                         self.selectedItem = 0
                         self.text = '\n'.join(self.itemList)
@@ -313,7 +314,7 @@ class MiniListBox(object):
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
-            if keyPressed.isalnum() or keyPressed == '.':
+            elif keyPressed.isalnum() or keyPressed == '.':
                 item = self.selectedItem
                 keyPressed = keyPressed.lower()
                 if item < self.itemCount - 1 \
@@ -321,7 +322,7 @@ class MiniListBox(object):
                     self.selectedItem += 1
                 else:
                     self.selectedItem = min(self.itemCount-1,
-                            bisect_left(self.itemList, keyPressed))
+                            bisect_left(self.sortKeys, keyPressed)) #MMMM self.itemList, keyPressed))
 
         @kb.add('down')
         def _(event):
@@ -712,10 +713,13 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
     a, screenHeight = os.get_terminal_size()
     listboxHeight = min(screenHeight - 10, len(itemList))
 
-    itemList = sorted(itemList)
+    # Set up a case-agnostic sort-and-lookup
+    itemList.sort(key = lambda x: x.lower())
+    sortKeys = [x.lower() for x in itemList]
 
     listBox = MiniListBox(
             itemList=itemList,
+            sortKeys=sortKeys,
             read_only=True,
             focusable=True,
             height=listboxHeight,
@@ -746,8 +750,27 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
                  can_create_new=False,
                  completer=None, password=False, style=None, async_=False):
     """
-    Display a file selection dialog with list box and full path line.
-    Return the given text, or None when cancelled.
+    Display a file selection dialog with filename list box and absolute path
+    textline. Return the given text, or None when cancelled.
+
+    This MiniFileDialog is based on the ListBoxDialog. The file box is a list
+    box that shows the files in the current directory. We add a secondary widget
+    called the "path box" that shows the absolute path to the currently-
+    selected file. (We might want to add a globbing-pattern widget too.)
+
+    For some applications the path box needs to be read-only, others not, and
+    in most applications we want it to be highlighted when it has
+    the focus. The FormattedTextControl (FTC) is an ideal widget for these
+    needs. However, a control-type object does not work when creating dialogs
+    with this software toolkit; it requires container-type objects. Fortunately
+    there is a container that has an FTC-type control, namely the MiniListBox.
+
+    As a side effect of implementing both the file box and the path box as
+    MiniListBoxes, we need to put their handler code side-by-side in the
+    MiniListBox class, which already handles plain old list boxes. In that code
+    we add some extra logic to figure out what kind of widget we are truly
+    handling. This is not object-oriented but we have to draw the line.
+
     """
 
     def accept(buf):
@@ -756,35 +779,23 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
 
     if os.path.isdir(filePath):
         fileName = ''
-        if not filePath.endswith('/'):
-            filePath += '/'
+        if not filePath.endswith(os.sep):
+            filePath += os.sep
     else:
         fileName = os.path.basename(filePath)
-        filePath = os.path.dirname(filePath) + '/'
+        filePath = os.path.dirname(filePath) + os.sep
 
     completions = list(PathCompleter().get_completions(
                 Document(filePath, len(filePath)), CompleteEvent()))
+
     itemList = ['..' + os.sep] + [c.display[0][1] for c in completions]
-    selected_item = itemList.index(fileName) if fileName else 0
+    itemList.sort(key = lambda x: x.lower())
+    sortKeys = [x.lower() for x in itemList]
+    selected_item = bisect_left(sortKeys, fileName.lower()) if fileName else 0
 
     # Reserve a suitable amount of vertical space for the list
     a, screenHeight = os.get_terminal_size()
     listboxHeight = min(screenHeight - 10, len(itemList))
-
-    # The MiniFileDialog is based on the ListBoxDialog. The main list box shows
-    # the existing file names. We attach to this box a "minor" widget called
-    # the path box that shows the absolute path to the currently-selected file.
-    # (We might want to add a globbing-pattern widget too.)
-
-    # For some applications the path box needs to be read-only, others not, and
-    # in most applications we want its textline to be highlighted when it has
-    # the focus. This makes the FormattedTextControl an ideal choice. Since
-    # the MiniListBox uses this control, we will go for that.
-
-    # As a side effect of implementing both widgets as MiniListBoxes, we need
-    # to combine the handler code for both widgets in the code for the
-    # MiniListBox class (which already handles plain list boxes too). This is
-    # not ideal but we have done the best job we can do.
 
     text = '{}{}'.format(filePath, fileName)
     pathBox = MiniListBox(
@@ -797,6 +808,7 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
 
     listBox = MiniListBox(
             itemList=itemList,
+            sortKeys=sortKeys,
             is_file_type=True,
             pathBox=pathBox,
             read_only=True,
