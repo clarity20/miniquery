@@ -44,6 +44,10 @@ __all__ = [
     'progress_dialog',
 ]
 
+LBOX_GENERAL=0
+LBOX_FILES=1
+LBOX_PATH=2
+
 class MiniListBox(object):
     """
     Based on prompt-toolkit's TextArea, this class uses a FormattedTextControl
@@ -61,9 +65,9 @@ class MiniListBox(object):
 
     :param itemList: The choices as a list of strings.
     :param multiline: If True, allow multiline input.
-    :param pathBox: If set, indicates this is an "Open file" list box and
-         points to the corresponding single-line, file/directory name widget
-    :param is_file_type: True if the calling dialog is a file-type dialog
+    :param companionBox: If set, indicates this is an "Open file" list box and
+         points to the "other" widget: either the files box or the path box
+    :param read_only: Can the user edit the text of the list box control?
     :param completer: :class:`~prompt_toolkit.completion.Completer` instance
         for auto completion.
     :param complete_while_typing: Boolean.
@@ -101,9 +105,9 @@ class MiniListBox(object):
     :param search_field: An optional `SearchToolbar` object.
     """
     def __init__(self, itemList=None, multiline=True, password=False,
-                 lexer=None, auto_suggest=None, completer=None,
+                 lexer=None, auto_suggest=None, completer=None, type=LBOX_GENERAL,
                  complete_while_typing=True, accept_handler=None, history=None,
-                 focusable=True, wrap_lines=True, pathBox=None, is_file_type=False,
+                 focusable=True, wrap_lines=True, companionBox=None,
                  read_only=False, width=None, height=None, selected_item=0,
                  dont_extend_height=False, dont_extend_width=False, sortKeys = [],
                  line_numbers=False, get_line_prefix=None, scrollbar=False,
@@ -125,7 +129,7 @@ class MiniListBox(object):
         self.wrap_lines = wrap_lines
         self.itemList = itemList
         self.sortKeys = sortKeys
-        self.is_file_type = is_file_type
+        self.type = type
 
         text = '\n'.join(itemList)
         self.buffer = Buffer(
@@ -172,93 +176,124 @@ class MiniListBox(object):
             right_margins=right_margins,
             get_line_prefix=get_line_prefix)
 
-        # "Who is my pathBox?" Is only set for list boxes of filenames
-        self.pathBox = pathBox
+        self.companionBox = companionBox
 
-        if self.is_file_type and not self.pathBox:
+        # Set placeholder values for correct object orientation
+        # Specialize the values for special types of MiniListBox
+        if self.type == LBOX_PATH:
             # For a path box, track the cursor position
             self.cursor_position = 0     # active value
-            self.selectedItem = -1       # placeholder only
+            self.selectedItem = -1
         else:
-            # For a list box (normal or filename-type), track the selected line
+            # For a list box (general or filename-type), track the selected line
             self.selectedItem = selected_item   # active value
-            self.cursor_position = -1           # placeholder only
+            self.cursor_position = 0 #MMMM -1
 
         self.itemCount = len(self.itemList)
         kb = KeyBindings()
 
         @kb.add('enter')
         def _(event):
-            #Hack: caller sets ok_button so the following will work
-            if self.ok_button:
+            def syncFileBoxToDirectory(fileBox, fullpath):
+                filenames = ['..' + os.sep] \
+                        + ['{}{}'.format(p.name, os.sep) if p.is_dir() else p.name for p in fullpath.iterdir()]
+                filenames.sort(key = lambda x: x.lower())
+                fileBox.itemList = filenames
+                fileBox.sortKeys = [x.lower() for x in filenames]
+                fileBox.itemCount = len(filenames)
+                fileBox.selectedItem = 0
+                fileBox.text = '\n'.join(filenames)
 
-                # If this ListBox "comes with" a PathBox, the two jointly
-                # serve the purpose of filename selection. In these situations,
-                # we need to keep them in sync with each other
-                if self.pathBox:
-                    pathBox = self.pathBox
+            # For a general-purpose list box, advance the focus to "OK";
+            # a click there will finalize the selection.
+            if self.type == LBOX_GENERAL:
+                get_app().layout.focus(self.ok_button)
+                return True
 
-                    # If the pathBox sent us here, it contains all we
-                    # can know about the full path.
-                    if get_app().layout.has_focus(pathBox): # and not pathBox.read_only:
+            # For a path box, accept the input. If a directory, update
+            # the file box and focus on it. Else focus on "OK".
+            elif self.type == LBOX_PATH:
+                fileBox = self.companionBox
 
-                        pathboxHasFocus = True
-                        fullpath = pathlib.Path(pathBox.itemList[0])  #.text[0][1])
+                # Read_onlies should never get here, but if they do somehow,
+                # then immediately jump to the file box
+                if self.read_only == True:
+                    get_app().layout.focus(fileBox)
+                    return True
 
-                    # If the ListBox sent us here, it contains the basename of
-                    # the chosen file and the pathBox contains its directory
-                    else:
-                        pathboxHasFocus = False
+                # Accept the edit and resolve it
+                fullpath = pathlib.Path(self.itemList[0])
+                self.itemList[0] = str(fullpath.resolve())
+                self.text = '\n'.join(self.itemList)
 
-                        # Fetch the basename and the directory
-                        filename = self.itemList[self.selectedItem]
-                        path = pathlib.Path(pathBox.itemList[0])
+                # Three possible scenarios: user has entered a directory name,
+                # an existing filename, or a new name
+                if fullpath.is_dir():
+                    #TODO: Clear a stale status msg
 
-                        # If the user moves to the ListBox after choosing a file
-                        # (not a directory!), the pathBox needs to be cleaned of
-                        # the original selection to get the new selection right.
-                        # So wipe out the filename, going up to the directory.
-                        if not path.is_dir():
-                            path = path.parent
+                    # Sync the file box to the directory name just accepted
+                    syncFileBoxToDirectory(fileBox, fullpath)
+                    # Jump to the file box
+                    get_app().layout.focus(fileBox)
+                    return True
 
-                        # Stitch them together
-                        fullpath = path / filename
+                elif fullpath.is_file():
+                    #TODO: Clear a stale status msg
 
-                    # Resolve and refresh the path box
-                    self.pathBox.itemList[0] = str(fullpath.resolve())
-                    self.pathBox.text = '\n'.join(self.pathBox.itemList)
-
-                    # If the user chose a directory, list its contents
-                    if fullpath.is_dir():
-                        self.itemList = ['..' + os.sep] \
-                                + ['{}{}'.format(p.name, os.sep) if p.is_dir() else p.name for p in fullpath.iterdir()]
-                        self.itemList.sort(key = lambda x: x.lower())
-                        self.sortKeys = [x.lower() for x in self.itemList]
-                        self.itemCount = len(self.itemList)
-                        self.selectedItem = 0
-                        self.text = '\n'.join(self.itemList)
-
-                    # If the user entered a non-existent filename (only
-                    # possible from the pathBox), accept it as a new file
-                    # to be created
-                    elif not fullpath.exists():
-                        get_app().layout.focus(self.ok_button)
-
-                    # If the user chose a file, accept the choice
-                    else:
-                        get_app().layout.focus(self.ok_button)
-
-                # A ListBox that "comes alone" is for ordinary selection. Advance
-                # the focus to "OK"; a click there will finalize the selection.
-                else:
+                    # Sync the file box to the filename's parent directory
+                    syncFileBoxToDirectory(fileBox, fullpath.parent)
+                    # Accept the filename provisionally: Jump to OK
                     get_app().layout.focus(self.ok_button)
+                    return True
+
+                elif not fullpath.exists():
+                    #TODO: Show a warning msg about non-existent / new file names
+                    #TODO: Accept a new directory name if there's a trailing slash
+
+                    # Sync the file box to the filename's parent directory
+                    syncFileBoxToDirectory(fileBox, fullpath.parent)
+                    get_app().layout.focus(self.ok_button)
+                    return True
+
+            # For a file-list box, synchronize with the path box
+            elif self.type == LBOX_FILES:
+                pathBox = self.companionBox
+
+                # Fetch the basename and the directory
+                filename = self.itemList[self.selectedItem]
+                path = pathlib.Path(pathBox.itemList[0])
+
+                # If the path box was already showing a file name (not a dir!)
+                # then this is a reselection and the path box is stale. Retreat
+                # to directory level before adding the new filename
+                if not path.is_dir():
+                    path = path.parent
+
+                # Append the filename to the directory
+                fullpath = path / filename
+
+                # Resolve and refresh the path box
+                pathBox.itemList[0] = str(fullpath.resolve())
+                pathBox.text = '\n'.join(pathBox.itemList)
+
+                # If the user chose a directory, list its contents
+                if fullpath.is_dir():
+                    syncFileBoxToDirectory(self, fullpath)
+                    # Stay focused on the file box: do nothing further
+
+                # If the user chose a file, accept the choice
+                elif fullpath.is_file():
+                    get_app().layout.focus(self.ok_button)
+
+                # Finally, a selection from the file box cannot be non-existing
+
             return True  # Keep text.
 
         @kb.add('escape')
         def _(event):
             #Hack: caller sets ok_button so the following will work
             if self.ok_button:
-                # Advance the focus from Box to Cancel via OK
+                # Advance the focus to Cancel via OK
                 get_app().layout.focus(self.ok_button)
                 get_app().layout.focus_next()
             return False  # Keep text.
@@ -268,8 +303,9 @@ class MiniListBox(object):
             keyPressed = event.key_sequence[0].key
 
             # For a path box, accept the keypress as an edit
-            # Setting self.text is what causes the box to refresh with the correct modified pathname
-            if self.cursor_position >= 0:   # only true for path box
+            if self.type == LBOX_PATH:
+                if self.read_only:
+                    return
                 curpos = self.cursor_position
                 item = self.itemList[0]
                 if len(keyPressed) == 1:     # roughly the same as keyPressed.isprintable()
@@ -314,7 +350,7 @@ class MiniListBox(object):
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
-            elif keyPressed.isalnum() or keyPressed == '.':
+            elif self.type == LBOX_FILES and (keyPressed.isalnum() or keyPressed == '.'):
                 item = self.selectedItem
                 keyPressed = keyPressed.lower()
                 if item < self.itemCount - 1 \
@@ -322,11 +358,11 @@ class MiniListBox(object):
                     self.selectedItem += 1
                 else:
                     self.selectedItem = min(self.itemCount-1,
-                            bisect_left(self.sortKeys, keyPressed)) #MMMM self.itemList, keyPressed))
+                            bisect_left(self.sortKeys, keyPressed))
 
         @kb.add('down')
         def _(event):
-            if self.selectedItem == -1:   # special flag that means path box
+            if self.type == LBOX_PATH:
                 return
             if self.selectedItem == self.itemCount-1:
                 return
@@ -335,7 +371,7 @@ class MiniListBox(object):
 
         @kb.add('up')
         def _(event):
-            if self.selectedItem == -1:   # special flag that means path box
+            if self.type == LBOX_PATH:
                 return
             if self.selectedItem == 0:
                 return
@@ -344,11 +380,15 @@ class MiniListBox(object):
 
         @kb.add('pagedown')
         def _(event):
+            if self.type == LBOX_PATH:
+                return
             jumpSize = min(self.window.height-1, self.itemCount-1-self.selectedItem)
             self.selectedItem = (self.selectedItem + jumpSize) % self.itemCount
 
         @kb.add('pageup')
         def _(event):
+            if self.type == LBOX_PATH:
+                return
             jumpSize = min(self.window.height-1, self.selectedItem)
             self.selectedItem = (self.selectedItem - jumpSize) % self.itemCount
 
@@ -359,6 +399,7 @@ class MiniListBox(object):
         items = self.itemList
         text = self.text
 
+#MMMM: handler should prolly return the y-value at the clickpoint: "x,y = self.get_cursor_position()"
         def handler(mouse_event):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.handler()
@@ -366,8 +407,7 @@ class MiniListBox(object):
         highlightScheme = 'fg:white bg:blue' if get_app().layout. \
             has_focus(self.control) else 'fg:white bg:gray'
 
-        if not self.pathBox:
-            # If I AM the pathBox (so I have no pathBox of my own),
+        if self.type == LBOX_PATH:
             # return my entire text in the single, correct color scheme
             idx = self.cursor_position
             return [
@@ -718,6 +758,7 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
     sortKeys = [x.lower() for x in itemList]
 
     listBox = MiniListBox(
+            type=LBOX_GENERAL,
             itemList=itemList,
             sortKeys=sortKeys,
             read_only=True,
@@ -799,24 +840,26 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
 
     text = '{}{}'.format(filePath, fileName)
     pathBox = MiniListBox(
+        type=LBOX_PATH,
         itemList=[text],
-        is_file_type=True,
         read_only= not can_create_new,
         focusable=True,
         height=1,
             )
 
     listBox = MiniListBox(
+            type=LBOX_FILES,
+            companionBox=pathBox,
             itemList=itemList,
             sortKeys=sortKeys,
-            is_file_type=True,
-            pathBox=pathBox,
             read_only=True,
             selected_item=selected_item,
             focusable=True,
             height=listboxHeight,
             completer=completer,
             accept_handler=accept)
+
+    pathBox.companionBox = listBox
 
     def ok_handler(dummy=None):
         get_app().exit(result=pathBox.itemList[0])
