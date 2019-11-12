@@ -302,17 +302,19 @@ class MiniListBox(object):
         def _(event):
             keyPressed = event.key_sequence[0].key
 
-            # For a path box, accept the keypress as an edit
+            # For path boxes, implement standard editing and navigation keys
             if self.type == LBOX_PATH:
                 if self.read_only:
                     return
                 curpos = self.cursor_position
                 item = self.itemList[0]
+
                 if len(keyPressed) == 1:     # roughly the same as keyPressed.isprintable()
                     self.itemList[0] = '{}{}{}'.format(item[:curpos], keyPressed, item[curpos:])
                     self.text = '\n'.join(self.itemList)
                     if curpos < len(item)-1:
                         self.cursor_position += 1
+                # Small optimization: separate search tree for control characters
                 elif keyPressed.startswith('c-'):
                     if keyPressed == 'c-left':
                         try:
@@ -330,11 +332,17 @@ class MiniListBox(object):
                         self.itemList[0] = item[:curpos]
                         self.text = '\n'.join(self.itemList)
                         self.cursor_position -= 1
-                    elif keyPressed == 'c-backspace':
-                        # Chop everything on the left
-                        self.itemList[0] = item[curpos:]
+                    # We see 'c-h' instead of 'backspace'
+                    elif keyPressed == 'c-h' and curpos > 0:
+                        self.itemList[0] = '{}{}'.format(item[:curpos-1], item[curpos:])
                         self.text = '\n'.join(self.itemList)
-                        self.cursor_position = 0
+                        self.cursor_position -= 1
+                    # No obvious way to implement 'c-backspace', at least on Android
+                    # elif keyPressed == 'c-backspace':
+                    #     # Chop everything on the left
+                    #     self.itemList[0] = item[curpos:]
+                    #     self.text = '\n'.join(self.itemList)
+                    #     self.cursor_position = 0
                 elif keyPressed == 'left' and curpos > 0:
                     self.cursor_position -= 1
                 elif keyPressed == 'right' and curpos < len(item)-1:
@@ -343,10 +351,6 @@ class MiniListBox(object):
                     self.itemList[0] = '{}{}'.format(item[:curpos], item[curpos+1:])
                     self.text = '\n'.join(self.itemList)
                     # do not change cursor position
-                elif keyPressed == 'backspace' and curpos > 0:
-                    self.itemList[0] = '{}{}'.format(item[:curpos-1], item[curpos:])
-                    self.text = '\n'.join(self.itemList)
-                    self.cursor_position -= 1
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
