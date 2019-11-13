@@ -48,6 +48,10 @@ LBOX_GENERAL=0
 LBOX_FILES=1
 LBOX_PATH=2
 
+BTNORDER_FIRST=0
+BTNORDER_MIDDLE=1
+BTNORDER_LAST=2
+
 class MiniListBox(object):
     """
     Based on prompt-toolkit's TextArea, this class uses a FormattedTextControl
@@ -176,7 +180,9 @@ class MiniListBox(object):
             right_margins=right_margins,
             get_line_prefix=get_line_prefix)
 
+        self.pathExists = True
         self.companionBox = companionBox
+        self.itemCount = len(self.itemList)
 
         # Set placeholder values for correct object orientation
         # Specialize the values for special types of MiniListBox
@@ -189,21 +195,10 @@ class MiniListBox(object):
             self.selectedItem = selected_item   # active value
             self.cursor_position = 0 #MMMM -1
 
-        self.itemCount = len(self.itemList)
         kb = KeyBindings()
 
         @kb.add('enter')
         def _(event):
-            def syncFileBoxToDirectory(fileBox, fullpath):
-                filenames = ['..' + os.sep] \
-                        + ['{}{}'.format(p.name, os.sep) if p.is_dir() else p.name for p in fullpath.iterdir()]
-                filenames.sort(key = lambda x: x.lower())
-                fileBox.itemList = filenames
-                fileBox.sortKeys = [x.lower() for x in filenames]
-                fileBox.itemCount = len(filenames)
-                fileBox.selectedItem = 0
-                fileBox.text = '\n'.join(filenames)
-
             # For a general-purpose list box, advance the focus to "OK";
             # a click there will finalize the selection.
             if self.type == LBOX_GENERAL:
@@ -226,48 +221,60 @@ class MiniListBox(object):
                 self.itemList[0] = str(fullpath.resolve())
                 self.text = '\n'.join(self.itemList)
 
+                #breakpoint()
                 # Three possible scenarios: user has entered a directory name,
                 # an existing filename, or a new name
-                if fullpath.is_dir():
-                    #TODO: Clear a stale status msg
 
+                if fullpath.is_dir():
                     # Sync the file box to the directory name just accepted
-                    syncFileBoxToDirectory(fileBox, fullpath)
-                    # Jump to the file box
+                    self.syncFileBoxToDirectory(fileBox, fullpath)
+                    # Jump to the file box, and the path-dance continues
                     get_app().layout.focus(fileBox)
                     return True
 
                 elif fullpath.is_file():
-                    #TODO: Clear a stale status msg
-
                     # Sync the file box to the filename's parent directory
-                    syncFileBoxToDirectory(fileBox, fullpath.parent)
+                    self.syncFileBoxToDirectory(fileBox, fullpath) #MMMM .parent)
                     # Accept the filename provisionally: Jump to OK
                     get_app().layout.focus(self.ok_button)
                     return True
 
                 elif not fullpath.exists():
-                    #TODO: Show a warning msg about non-existent / new file names
-                    #TODO: Accept a new directory name if there's a trailing slash
+                    #TODO: Recognize & accept a new directory name if there's a trailing slash
 
-                    # Sync the file box to the filename's parent directory
-                    syncFileBoxToDirectory(fileBox, fullpath.parent)
+                    # Allow the user to create new files. Jump to "OK" to make
+                    # this as easy as possible.
                     get_app().layout.focus(self.ok_button)
+
+                    # New filenames can gum up the works if the user opts
+                    # not to click either "OK" or "Cancel", so we set up
+                    # a mechanism to roll back to a known path if that happens.
+                    self.pathExists = False
+
                     return True
 
             # For a file-list box, synchronize with the path box
             elif self.type == LBOX_FILES:
                 pathBox = self.companionBox
 
-                # Fetch the basename and the directory
+                # Fetch the base file name and the directory
                 filename = self.itemList[self.selectedItem]
                 path = pathlib.Path(pathBox.itemList[0])
 
-                # If the path box was already showing a file name (not a dir!)
-                # then this is a reselection and the path box is stale. Retreat
-                # to directory level before adding the new filename
-                if not path.is_dir():
+                # Address a corner case where the path box contents are stale:
+                # If the path box has a file name (not a directory), it
+                # reflects the user's choice the previous time he was in
+                # the file box. Retreat up to directory level
+                # before appending the new filename.
+                if path.is_file():
                     path = path.parent
+
+                # The following situation should never come up. When the user
+                # presses 'enter' with a nonexistent path, the focus jumps
+                # to the OK button, not the fileBox. (What if he tabs to the filebox?)
+                #elif not path.exists():
+                #    path = pathBox.lastExistingPath.parent
+                #    filename = pathBox.lastExistingPath.name
 
                 # Append the filename to the directory
                 fullpath = path / filename
@@ -278,14 +285,14 @@ class MiniListBox(object):
 
                 # If the user chose a directory, list its contents
                 if fullpath.is_dir():
-                    syncFileBoxToDirectory(self, fullpath)
+                    self.syncFileBoxToDirectory(self, fullpath)
                     # Stay focused on the file box: do nothing further
 
                 # If the user chose a file, accept the choice
                 elif fullpath.is_file():
                     get_app().layout.focus(self.ok_button)
 
-                # Finally, a selection from the file box cannot be non-existing
+                # Note that a selection from the file box cannot be non-existing
 
             return True  # Keep text.
 
@@ -337,7 +344,7 @@ class MiniListBox(object):
                         self.itemList[0] = '{}{}'.format(item[:curpos-1], item[curpos:])
                         self.text = '\n'.join(self.itemList)
                         self.cursor_position -= 1
-                    # No obvious way to implement 'c-backspace', at least on Android
+                    # No obvious way to handle 'c-backspace', at least on Android
                     # elif keyPressed == 'c-backspace':
                     #     # Chop everything on the left
                     #     self.itemList[0] = item[curpos:]
@@ -397,6 +404,18 @@ class MiniListBox(object):
             self.selectedItem = (self.selectedItem - jumpSize) % self.itemCount
 
         self.control.key_bindings = kb
+
+    @staticmethod
+    def syncFileBoxToDirectory(fileBox, fullpath):
+        directory = fullpath.parent if fullpath.is_file() else fullpath
+        filenames = ['..' + os.sep] \
+                + ['{}{}'.format(f.name, os.sep) if f.is_dir() else f.name for f in directory.iterdir()]
+        filenames.sort(key = lambda x: x.lower())
+        fileBox.itemList = filenames
+        fileBox.sortKeys = [x.lower() for x in filenames]
+        fileBox.itemCount = len(filenames)
+        fileBox.selectedItem = bisect_left(fileBox.sortKeys, fullpath.name.lower()) if fullpath.is_file() else 0
+        fileBox.text = '\n'.join(filenames)
 
     def _get_text_fragments(self):
         item = self.selectedItem
@@ -503,7 +522,7 @@ class MiniButton(object):
     :param addHotkey: Create a hotkey for this button, using the prefix '&'
         or defaulting to the first character.
     """
-    def __init__(self, text, handler=None, width=12, addHotkey=True):
+    def __init__(self, text, handler=None, width=12, addHotkey=True, order=BTNORDER_MIDDLE, neighborBox=None):
         assert isinstance(text, six.text_type)
         assert handler is None or callable(handler)
         assert isinstance(width, int)
@@ -526,6 +545,8 @@ class MiniButton(object):
             self._get_text_fragments,
             key_bindings=self._get_key_bindings(),
             focusable=True)
+        self.order = order
+        self.neighborBox = neighborBox
 
         def get_style():
             if get_app().layout.has_focus(self):
@@ -585,6 +606,31 @@ class MiniButton(object):
         def _(event):
             if self.handler == _return_none:
                 self.handler()
+
+        @kb.add('tab')
+        def _(event):
+            get_app().layout.focus_next()
+            if self.order == BTNORDER_LAST:
+                # We are tabbing past the last button ("Cancel") of a MiniFileDialog.
+                # Reset the path and file boxes, falling back on getcwd()
+                pathBox = self.neighborBox
+                if not pathBox.pathExists:
+                    pathBox.pathExists = True
+                    pathBox.itemList = [os.getcwd()]
+                    pathBox.text = '\n'.join(pathBox.itemList)
+                    pathBox.syncFileBoxToDirectory(pathBox.companionBox, pathlib.Path(pathBox.itemList[0]))
+
+        @kb.add('s-tab')
+        def _(event):
+            get_app().layout.focus_previous()
+            if self.order == BTNORDER_FIRST:
+                # See the 'tab' handler above. We are shift-tabbing behind the "OK" button.
+                pathBox = self.neighborBox.companionBox
+                if not pathBox.pathExists:
+                    pathBox.pathExists = True
+                    pathBox.itemList = [os.getcwd()]
+                    pathBox.text = '\n'.join(pathBox.itemList)
+                    pathBox.syncFileBoxToDirectory(pathBox.companionBox, pathlib.Path(pathBox.itemList[0]))
 
         return kb
 
@@ -868,8 +914,8 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
     def ok_handler(dummy=None):
         get_app().exit(result=pathBox.itemList[0])
 
-    ok_button = MiniButton(text=ok_text, handler=ok_handler)
-    cancel_button = MiniButton(text=cancel_text, handler=_return_none)
+    ok_button = MiniButton(text=ok_text, handler=ok_handler, order=BTNORDER_FIRST, neighborBox=listBox)
+    cancel_button = MiniButton(text=cancel_text, handler=_return_none, order=BTNORDER_LAST, neighborBox=pathBox)
 
     #hack: see MiniListBox code with ok_button
     listBox.ok_button = ok_button
