@@ -356,7 +356,7 @@ class MiniListBox(object):
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
-            elif self.type in [LBOX_FILES, LBOX_GENERAL] and (keyPressed.isalnum() or keyPressed == '.'):
+            elif self.type in [LBOX_FILES, LBOX_GENERAL] and len(keyPressed) == 1:
                 item = self.selectedItem
                 keyPressed = keyPressed.lower()
                 if item < self.itemCount - 1 \
