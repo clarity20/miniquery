@@ -181,19 +181,12 @@ class MiniListBox(object):
             get_line_prefix=get_line_prefix)
 
         self.pathExists = True
+        if self.type == LBOX_PATH:
+            self.previousPath = self.itemList[0]
         self.companionBox = companionBox
         self.itemCount = len(self.itemList)
-
-        # Set placeholder values for correct object orientation
-        # Specialize the values for special types of MiniListBox
-        if self.type == LBOX_PATH:
-            # For a path box, track the cursor position
-            self.cursor_position = 0     # active value
-            self.selectedItem = -1
-        else:
-            # For a list box (general or filename-type), track the selected line
-            self.selectedItem = selected_item   # active value
-            self.cursor_position = 0 #MMMM -1
+        self.cursor_position = 0
+        self.selectedItem = -1 if self.type == LBOX_PATH else selected_item
 
         kb = KeyBindings()
 
@@ -210,18 +203,11 @@ class MiniListBox(object):
             elif self.type == LBOX_PATH:
                 fileBox = self.companionBox
 
-                # Read_onlies should never get here, but if they do somehow,
-                # then immediately jump to the file box
-                if self.read_only == True:
-                    get_app().layout.focus(fileBox)
-                    return True
-
                 # Accept the edit and resolve it
-                fullpath = pathlib.Path(self.itemList[0])
-                self.itemList[0] = str(fullpath.resolve())
+                fullpath = pathlib.Path(self.itemList[0]).resolve()
+                self.itemList = [str(fullpath)]
                 self.text = '\n'.join(self.itemList)
 
-                #breakpoint()
                 # Three possible scenarios: user has entered a directory name,
                 # an existing filename, or a new name
 
@@ -230,28 +216,38 @@ class MiniListBox(object):
                     self.syncFileBoxToDirectory(fileBox, fullpath)
                     # Jump to the file box, and the path-dance continues
                     get_app().layout.focus(fileBox)
+                    self.previousPath = self.itemList[0]
                     return True
 
                 elif fullpath.is_file():
-                    # Sync the file box to the filename's parent directory
-                    self.syncFileBoxToDirectory(fileBox, fullpath) #MMMM .parent)
+                    # Sync the file box to the filename's directory
+                    self.syncFileBoxToDirectory(fileBox, fullpath)
                     # Accept the filename provisionally: Jump to OK
                     get_app().layout.focus(self.ok_button)
+                    self.previousPath = self.itemList[0]
                     return True
 
                 elif not fullpath.exists():
-                    #TODO: Recognize & accept a new directory name if there's a trailing slash
+                    # For a read-only path box, do not allow creation of new files
+                    if self.read_only:
+                        # Revert to a known good path
+                        self.itemList = [self.previousPath]
+                        self.text = '\n'.join(self.itemList)
+                        return True
 
-                    # Allow the user to create new files. Jump to "OK" to make
-                    # this as easy as possible.
-                    get_app().layout.focus(self.ok_button)
+                    else:
+                        #TODO: Recognize & accept a new directory name if there's a trailing slash
 
-                    # New filenames can gum up the works if the user opts
-                    # not to click either "OK" or "Cancel", so we set up
-                    # a mechanism to roll back to a known path if that happens.
-                    self.pathExists = False
+                        # Allow the user to create new files. Jump to "OK" to make
+                        # this as easy as possible.
+                        get_app().layout.focus(self.ok_button)
 
-                    return True
+                        # New filenames can gum up the works if the user opts
+                        # not to click either "OK" or "Cancel", so we set up
+                        # a mechanism to roll back to a known path if that happens.
+                        self.pathExists = False
+
+                        return True
 
             # For a file-list box, synchronize with the path box
             elif self.type == LBOX_FILES:
@@ -273,24 +269,26 @@ class MiniListBox(object):
                 # presses 'enter' with a nonexistent path, the focus jumps
                 # to the OK button, not the fileBox. (What if he tabs to the filebox?)
                 #elif not path.exists():
-                #    path = pathBox.lastExistingPath.parent
-                #    filename = pathBox.lastExistingPath.name
+                #    path = pathBox.previousPath.parent
+                #    filename = pathBox.previousPath.name
 
                 # Append the filename to the directory
-                fullpath = path / filename
+                fullpath = (path / filename).resolve()
 
                 # Resolve and refresh the path box
-                pathBox.itemList[0] = str(fullpath.resolve())
+                pathBox.itemList = [str(fullpath)]
                 pathBox.text = '\n'.join(pathBox.itemList)
 
                 # If the user chose a directory, list its contents
                 if fullpath.is_dir():
                     self.syncFileBoxToDirectory(self, fullpath)
+                    pathBox.previousPath = pathBox.itemList[0]
                     # Stay focused on the file box: do nothing further
 
                 # If the user chose a file, accept the choice
                 elif fullpath.is_file():
                     get_app().layout.focus(self.ok_button)
+                    pathBox.previousPath = pathBox.itemList[0]
 
                 # Note that a selection from the file box cannot be non-existing
 
@@ -298,7 +296,6 @@ class MiniListBox(object):
 
         @kb.add('escape')
         def _(event):
-            #Hack: caller sets ok_button so the following will work
             if self.ok_button:
                 # Advance the focus to Cancel via OK
                 get_app().layout.focus(self.ok_button)
@@ -311,13 +308,11 @@ class MiniListBox(object):
 
             # For path boxes, implement standard editing and navigation keys
             if self.type == LBOX_PATH:
-                if self.read_only:
-                    return
                 curpos = self.cursor_position
-                item = self.itemList[0]
+                item = self.text   # a single item, plus terminal space for appending
 
                 if len(keyPressed) == 1:     # roughly the same as keyPressed.isprintable()
-                    self.itemList[0] = '{}{}{}'.format(item[:curpos], keyPressed, item[curpos:])
+                    self.itemList = ['{}{}{}'.format(item[:curpos], keyPressed, item[curpos:])]
                     self.text = '\n'.join(self.itemList)
                     if curpos < len(item)-1:
                         self.cursor_position += 1
@@ -336,18 +331,18 @@ class MiniListBox(object):
                             self.cursor_position = length-1
                     elif keyPressed == 'c-delete':
                         # Chop from here to the end
-                        self.itemList[0] = item[:curpos]
+                        self.itemList = [item[:curpos]]
                         self.text = '\n'.join(self.itemList)
                         self.cursor_position -= 1
                     # We see 'c-h' instead of 'backspace'
                     elif keyPressed == 'c-h' and curpos > 0:
-                        self.itemList[0] = '{}{}'.format(item[:curpos-1], item[curpos:])
+                        self.itemList = ['{}{}'.format(item[:curpos-1], item[curpos:])]
                         self.text = '\n'.join(self.itemList)
                         self.cursor_position -= 1
                     # No obvious way to handle 'c-backspace', at least on Android
                     # elif keyPressed == 'c-backspace':
                     #     # Chop everything on the left
-                    #     self.itemList[0] = item[curpos:]
+                    #     self.itemList = [item[curpos:]]
                     #     self.text = '\n'.join(self.itemList)
                     #     self.cursor_position = 0
                 elif keyPressed == 'left' and curpos > 0:
@@ -355,13 +350,13 @@ class MiniListBox(object):
                 elif keyPressed == 'right' and curpos < len(item)-1:
                     self.cursor_position += 1
                 elif keyPressed == 'delete':
-                    self.itemList[0] = '{}{}'.format(item[:curpos], item[curpos+1:])
+                    self.itemList = ['{}{}'.format(item[:curpos], item[curpos+1:])]
                     self.text = '\n'.join(self.itemList)
                     # do not change cursor position
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
-            elif self.type == LBOX_FILES and (keyPressed.isalnum() or keyPressed == '.'):
+            elif self.type in [LBOX_FILES, LBOX_GENERAL] and (keyPressed.isalnum() or keyPressed == '.'):
                 item = self.selectedItem
                 keyPressed = keyPressed.lower()
                 if item < self.itemCount - 1 \
@@ -616,7 +611,7 @@ class MiniButton(object):
                 pathBox = self.neighborBox
                 if not pathBox.pathExists:
                     pathBox.pathExists = True
-                    pathBox.itemList = [os.getcwd()]
+                    pathBox.itemList = [pathBox.previousPath]
                     pathBox.text = '\n'.join(pathBox.itemList)
                     pathBox.syncFileBoxToDirectory(pathBox.companionBox, pathlib.Path(pathBox.itemList[0]))
 
@@ -628,7 +623,7 @@ class MiniButton(object):
                 pathBox = self.neighborBox.companionBox
                 if not pathBox.pathExists:
                     pathBox.pathExists = True
-                    pathBox.itemList = [os.getcwd()]
+                    pathBox.itemList = [pathBox.previousPath]
                     pathBox.text = '\n'.join(pathBox.itemList)
                     pathBox.syncFileBoxToDirectory(pathBox.companionBox, pathlib.Path(pathBox.itemList[0]))
 
