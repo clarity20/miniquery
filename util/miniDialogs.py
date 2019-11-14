@@ -52,6 +52,10 @@ BTNORDER_FIRST=0
 BTNORDER_MIDDLE=1
 BTNORDER_LAST=2
 
+# Define a space character that's appended to a line of editable text in the GUI.
+# This will allow appending of characters to work the same way as inserting them.
+EOL_PADCHAR=' '
+
 class MiniListBox(object):
     """
     Based on prompt-toolkit's TextArea, this class uses a FormattedTextControl
@@ -135,7 +139,7 @@ class MiniListBox(object):
         self.sortKeys = sortKeys
         self.type = type
 
-        text = '\n'.join(itemList)
+        text = '{}{}'.format(itemList[0], EOL_PADCHAR) if type == LBOX_PATH else '\n'.join(itemList)
         self.buffer = Buffer(
             document=Document(text, 0),
             multiline=multiline,
@@ -205,8 +209,7 @@ class MiniListBox(object):
 
                 # Accept the edit and resolve it
                 fullpath = pathlib.Path(self.itemList[0]).resolve()
-                self.itemList = [str(fullpath)]
-                self.text = '\n'.join(self.itemList)
+                self.populatePathBox(str(fullpath))
 
                 # Three possible scenarios: user has entered a directory name,
                 # an existing filename, or a new name
@@ -231,8 +234,7 @@ class MiniListBox(object):
                     # For a read-only path box, do not allow creation of new files
                     if self.read_only:
                         # Revert to a known good path
-                        self.itemList = [self.previousPath]
-                        self.text = '\n'.join(self.itemList)
+                        self.populatePathBox(self.previousPath)
                         return True
 
                     else:
@@ -275,9 +277,8 @@ class MiniListBox(object):
                 # Append the filename to the directory
                 fullpath = (path / filename).resolve()
 
-                # Resolve and refresh the path box
-                pathBox.itemList = [str(fullpath)]
-                pathBox.text = '\n'.join(pathBox.itemList)
+                # Refresh the path box
+                pathBox.populatePathBox(str(fullpath))
 
                 # If the user chose a directory, list its contents
                 if fullpath.is_dir():
@@ -309,12 +310,11 @@ class MiniListBox(object):
             # For path boxes, implement standard editing and navigation keys
             if self.type == LBOX_PATH:
                 curpos = self.cursor_position
-                item = self.text   # a single item, plus terminal space for appending
+                item = self.itemList[0]
 
                 if len(keyPressed) == 1:     # roughly the same as keyPressed.isprintable()
-                    self.itemList = ['{}{}{}'.format(item[:curpos], keyPressed, item[curpos:])]
-                    self.text = '\n'.join(self.itemList)
-                    if curpos < len(item)-1:
+                    self.populatePathBox('{}{}{}'.format(item[:curpos], keyPressed, item[curpos:]))
+                    if curpos <= len(item):
                         self.cursor_position += 1
                 # Small optimization: separate search tree for control characters
                 elif keyPressed.startswith('c-'):
@@ -328,16 +328,14 @@ class MiniListBox(object):
                         try:
                             self.cursor_position = item.index(os.sep, curpos+1, length)
                         except ValueError:
-                            self.cursor_position = length-1
+                            self.cursor_position = length
                     elif keyPressed == 'c-delete':
                         # Chop from here to the end
-                        self.itemList = [item[:curpos]]
-                        self.text = '\n'.join(self.itemList)
+                        self.populatePathBox(item[:curpos])
                         self.cursor_position -= 1
-                    # We see 'c-h' instead of 'backspace'
+                    # System sends us 'c-h' instead of 'backspace'
                     elif keyPressed == 'c-h' and curpos > 0:
-                        self.itemList = ['{}{}'.format(item[:curpos-1], item[curpos:])]
-                        self.text = '\n'.join(self.itemList)
+                        self.populatePathBox('{}{}'.format(item[:curpos-1], item[curpos:]))
                         self.cursor_position -= 1
                     # No obvious way to handle 'c-backspace', at least on Android
                     # elif keyPressed == 'c-backspace':
@@ -347,11 +345,10 @@ class MiniListBox(object):
                     #     self.cursor_position = 0
                 elif keyPressed == 'left' and curpos > 0:
                     self.cursor_position -= 1
-                elif keyPressed == 'right' and curpos < len(item)-1:
+                elif keyPressed == 'right' and curpos < len(item):
                     self.cursor_position += 1
                 elif keyPressed == 'delete':
-                    self.itemList = ['{}{}'.format(item[:curpos], item[curpos+1:])]
-                    self.text = '\n'.join(self.itemList)
+                    self.populatePathBox('{}{}'.format(item[:curpos], item[curpos+1:]))
                     # do not change cursor position
                 return
 
@@ -411,6 +408,11 @@ class MiniListBox(object):
         fileBox.itemCount = len(filenames)
         fileBox.selectedItem = bisect_left(fileBox.sortKeys, fullpath.name.lower()) if fullpath.is_file() else 0
         fileBox.text = '\n'.join(filenames)
+
+    def populatePathBox(self, text):
+        assert self.type == LBOX_PATH
+        self.itemList = [text]
+        self.text = '{}{}'.format(text, EOL_PADCHAR)
 
     def _get_text_fragments(self):
         item = self.selectedItem
@@ -787,7 +789,7 @@ def input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
 def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
                  completer=None, password=False, style=None, async_=False):
     """
-    Display a list box. (Make it a drop-down, someday.)
+    Display a list box.
     Return the given text, or None when cancelled.
     """
     def accept(buf):
@@ -844,8 +846,8 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
     called the "path box" that shows the absolute path to the currently-
     selected file. (We might want to add a globbing-pattern widget too.)
 
-    For some applications the path box needs to be read-only, others not, and
-    in most applications we want it to be highlighted when it has
+    For some applications the path box needs to reject noexisting paths, others
+    not, and in most applications we want it to be highlighted when it has
     the focus. The FormattedTextControl (FTC) is an ideal widget for these
     needs. However, a control-type object does not work when creating dialogs
     with this software toolkit; it requires container-type objects. Fortunately
@@ -883,10 +885,10 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
     a, screenHeight = os.get_terminal_size()
     listboxHeight = min(screenHeight - 10, len(itemList))
 
-    text = '{}{}'.format(filePath, fileName)
+    fullpath = '{}{}'.format(filePath, fileName)
     pathBox = MiniListBox(
         type=LBOX_PATH,
-        itemList=[text],
+        itemList=[fullpath],
         read_only= not can_create_new,
         focusable=True,
         height=1,
