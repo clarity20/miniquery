@@ -415,50 +415,52 @@ class MiniListBox(object):
         self.text = '{}{}'.format(text, EOL_PADCHAR)
 
     def _get_text_fragments(self):
+        def mouse_handler(mouse_event):
+            if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                if self.type == LBOX_PATH:
+                    self.cursor_position = mouse_event.position.x
+                else:
+                    self.selectedItem = mouse_event.position.y
+
         item = self.selectedItem
         items = self.itemList
         text = self.text
-
-#MMMM: handler should prolly return the y-value at the clickpoint: "x,y = self.get_cursor_position()"
-        def handler(mouse_event):
-            if mouse_event.event_type == MouseEventType.MOUSE_UP:
-                self.handler()
 
         highlightScheme = 'fg:white bg:blue' if get_app().layout. \
             has_focus(self.control) else 'fg:white bg:gray'
 
         if self.type == LBOX_PATH:
-            # return my entire text in the single, correct color scheme
+            # return the entire text in the single, correct color scheme
             idx = self.cursor_position
             return [
-                (highlightScheme, text[:idx], handler),
+                (highlightScheme, text[:idx], mouse_handler),
                 ('[SetCursorPosition]', ''),
-                (highlightScheme, text[idx:], handler),
+                (highlightScheme, text[idx:], mouse_handler),
                ]
 
         if item == self.itemCount-1:  # last item
             idx = text.rindex(items[item])
             return [
-                ('', text[:idx], handler),
+                ('', text[:idx], mouse_handler),
                 ('[SetCursorPosition]', ''),
-                (highlightScheme, text[idx:], handler),
+                (highlightScheme, text[idx:], mouse_handler),
                ]
         elif item > 0:
             searchString = '\n{}\n'.format(items[item])
             startIdx = text.index(searchString) + 1  # skip leading NL
             endIdx = text.find('\n', startIdx) + 1  # enclose next NL
             return [
-                ('', text[:startIdx], handler),
+                ('', text[:startIdx], mouse_handler),
                 ('[SetCursorPosition]', ''),
-                (highlightScheme, text[startIdx:endIdx], handler),
-                ('', text[endIdx:], handler),
+                (highlightScheme, text[startIdx:endIdx], mouse_handler),
+                ('', text[endIdx:], mouse_handler),
                ]
         else:    # item == 0
             endIdx = text.find('\n') + 1
             return [
                 ('[SetCursorPosition]', ''),
-                (highlightScheme, text[:endIdx], handler),
-                ('', text[endIdx:], handler),
+                (highlightScheme, text[:endIdx], mouse_handler),
+                ('', text[endIdx:], mouse_handler),
                ]
 
     def _get_key_bindings(self):
