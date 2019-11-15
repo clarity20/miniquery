@@ -234,6 +234,7 @@ class MiniListBox(object):
                     # For a read-only path box, do not allow creation of new files
                     if self.read_only:
                         # Revert to a known good path
+                        #TODO: A visible warning msg would be good here
                         self.populatePathBox(self.previousPath)
                         return True
 
@@ -350,6 +351,10 @@ class MiniListBox(object):
                 elif keyPressed == 'delete':
                     self.populatePathBox('{}{}'.format(item[:curpos], item[curpos+1:]))
                     # do not change cursor position
+                elif keyPressed == 'home':
+                    self.cursor_position = 0
+                elif keyPressed == 'end':
+                    self.cursor_position = len(item)-1
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
@@ -394,6 +399,18 @@ class MiniListBox(object):
                 return
             jumpSize = min(self.window.height-1, self.selectedItem)
             self.selectedItem = (self.selectedItem - jumpSize) % self.itemCount
+
+        @kb.add('home')
+        def _(event):
+            if self.type == LBOX_PATH:
+                return
+            self.selectedItem = 0
+
+        @kb.add('end')
+        def _(event):
+            if self.type == LBOX_PATH:
+                return
+            self.selectedItem = self.itemCount-1
 
         self.control.key_bindings = kb
 
@@ -611,7 +628,7 @@ class MiniButton(object):
             get_app().layout.focus_next()
             if self.order == BTNORDER_LAST:
                 # We are tabbing past the last button ("Cancel") of a MiniFileDialog.
-                # Reset the path and file boxes, falling back on getcwd()
+                # Reset the path and file boxes
                 pathBox = self.neighborBox
                 if not pathBox.pathExists:
                     pathBox.pathExists = True
