@@ -354,7 +354,7 @@ class MiniListBox(object):
                 elif keyPressed == 'home':
                     self.cursor_position = 0
                 elif keyPressed == 'end':
-                    self.cursor_position = len(item)-1
+                    self.cursor_position = len(item)
                 return
 
             # For a list box, enable letters/numbers as shortcuts for selection
@@ -817,7 +817,9 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
 
     # Reserve a suitable amount of vertical space for the list
     a, screenHeight = os.get_terminal_size()
-    listboxHeight = min(screenHeight - 10, len(itemList))
+    itemCount = len(itemList)
+    listboxHeight = min(screenHeight - 10, itemCount)
+    useScrollbar = listboxHeight < itemCount
 
     # Set up a case-agnostic sort-and-lookup
     itemList.sort(key = lambda x: x.lower())
@@ -830,6 +832,7 @@ def MiniListBoxDialog(title='', itemList=[], ok_text='OK', cancel_text='Cancel',
             read_only=True,
             focusable=True,
             height=listboxHeight,
+            scrollbar=useScrollbar,
             completer=completer,
             accept_handler=accept)
 
@@ -902,7 +905,9 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
 
     # Reserve a suitable amount of vertical space for the list
     a, screenHeight = os.get_terminal_size()
-    listboxHeight = min(screenHeight - 10, len(itemList))
+    itemCount = len(itemList)
+    listboxHeight = min(screenHeight - 10, itemCount)
+    useScrollbar = listboxHeight < itemCount
 
     fullpath = '{}{}'.format(filePath, fileName)
     pathBox = MiniListBox(
@@ -922,6 +927,7 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
             selected_item=selected_item,
             focusable=True,
             height=listboxHeight,
+            scrollbar=useScrollbar,
             completer=completer,
             accept_handler=accept)
 
