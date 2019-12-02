@@ -23,6 +23,9 @@ class ReturnCode(Enum):
     MISSING_PASSWORD = 15
     ILLEGAL_ARGUMENT = 16
     Clarification = 17
+    CONFIG_FILE_FORMAT_ERROR = 18
+    CONFIG_VALIDATION_ERROR = 19
+    CONFIG_MISSING_REQUIRED_SECTION = 20
 
 errorMsgDict = {
     0 : '',
@@ -42,7 +45,10 @@ errorMsgDict = {
     14 : 'Illegal {0} "{1}" in prompt.',
     15 : 'Unable to prompt for password. Please specify it using "-p" option or config file.',
     16 : 'Illegal argument. {0} is required.',  # This should be specialized to the context
-    17 : '' # Reserved for mere warnings
+    17 : '', # Reserved for mere warnings
+    18 : 'Formatting error with config file {0}.',
+    19 : 'Errors in config file {0}:\n{1}',
+    20 : 'Config file {0} is missing required section {1}.',
     }
 
 class ErrorManager:
