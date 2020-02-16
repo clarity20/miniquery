@@ -1,7 +1,9 @@
+#Problematic to cython/py3.8:
+#from __future__ import unicode_literals
+
 """
 Collection of reusable components for building full screen applications.
 """
-from __future__ import unicode_literals
 from prompt_toolkit.filters import has_completions, has_focus, Condition, is_true
 from prompt_toolkit.formatted_text import is_formatted_text
 from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
@@ -23,7 +25,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.eventloop import run_in_executor
 from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout import Layout
-from prompt_toolkit.widgets import ProgressBar, Label, Box, TextArea, RadioList, Shadow, Frame
+from prompt_toolkit.widgets import ProgressBar, Label, Box, TextArea, RadioList, Shadow, Frame, SearchToolbar
 
 import pathlib
 import six
