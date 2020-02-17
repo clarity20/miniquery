@@ -1,9 +1,11 @@
+#!/usr/bin/env bash
+
 ######## Helper functions ########
 
 ERRCODE_MV_FAILED=100
 function make_clean() {
     # Move previous files to "old" directory
-    if ! mv "${INCLUDES_PYX}"  "${INCLUDES_C}"  "${INCLUDES_O}"  "${INCLUDES_SO}" old; then
+    if ! mv "${INCLUDES_PYX}"  "${INCLUDES_C}"  "${INCLUDES_O}"  "${INCLUDES_SO}" old 2>/dev/null; then
         echo WARNING: File backups failed. 2> /dev/null
         return $ERRCODE_MV_FAILED
     fi
@@ -39,17 +41,17 @@ case $OSTYPE in
     BUILD_DIR=${SRC_DIR}/build/temp.linux-armv7l-3.7
     INCLUDES_O=${BUILD_DIR}/utilIncludes.o
     INCLUDES_SO=${SRC_DIR}/utilIncludes.cpython-37m.so
-    COMPILER=arm-linux-androideabi-clang
+    COMPILE=arm-linux-androideabi-clang
 
     make_clean
     generate_includes_pyx || exit 2
     includes_pyx_to_c || exit $?
 
     # Convert C source into .o object file
-    "$COMPILER" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python3.7m -c "${INCLUDES_C}" -o "${INCLUDES_O}" || exit 4
+    "$COMPILE" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python3.7m -c "${INCLUDES_C}" -o "${INCLUDES_O}" || exit 4
 
     # Generate DLL/.so from object file
-    "$COMPILER" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${INCLUDES_O}" -L/data/data/com.termux/files/usr/lib -lpython3.7m -o "${INCLUDES_SO}" || exit 5
+    "$COMPILE" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${INCLUDES_O}" -L/data/data/com.termux/files/usr/lib -lpython3.7m -o "${INCLUDES_SO}" || exit 5
 
     strip "${INCLUDES_SO}" || exit 6
     ;;
@@ -61,14 +63,14 @@ case $OSTYPE in
     BUILD_DIR=${SRC_DIR}/build/temp.linux-x86_64-3.4m
     INCLUDES_O=${BUILD_DIR}/utilIncludes.o
     INCLUDES_SO=${SRC_DIR}/utilIncludes.so
-    COMPILER=gcc
+    COMPILE=gcc
 
     make_clean
     generate_includes_pyx || exit 2
     includes_pyx_to_c || exit $?
 
-    "$COMPILER" -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c "${INCLUDES_C}" -o "${INCLUDES_O}" || exit 4
-    "$COMPILER" -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld "${INCLUDES_O}" -L/usr/lib64 -lpython3.4m -o "${INCLUDES_SO}" || exit 5
+    "$COMPILE" -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c "${INCLUDES_C}" -o "${INCLUDES_O}" || exit 4
+    "$COMPILE" -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld "${INCLUDES_O}" -L/usr/lib64 -lpython3.4m -o "${INCLUDES_SO}" || exit 5
 
     strip "${INCLUDES_SO}" || exit 6
     ;;
@@ -76,7 +78,12 @@ case $OSTYPE in
   *)
     # For Windows. Any other OS'es should be added before this section.
     USAGE="USAGE: $0 buildType$'\n'    buildTypes:  x86  x86_64"
-    BUILDTYPE="${1:?$USAGE}"
+    BUILDTYPE="$1"
+    if [[ -z "$BUILDTYPE" ]]; then
+        echo "$USAGE"
+        exit 1
+    fi
+
     PYVERSION="$(python --version)"
     PYVERSION="$(echo "$PYVERSION" | sed -r 's/Python (.)\.(.*)\..*/\1\2/')"
     case $BUILDTYPE in
@@ -102,10 +109,6 @@ case $OSTYPE in
     INCLUDES_O=${BUILD_DIR}/utilIncludes.obj      # $ARCH-dependent; place accordingly
     INCLUDES_SO=${BUILD_DIR}/utilIncludes.dll     # $ARCH-dependent; place accordingly
 
-    MSTOOLS=${MSVC}/bin/HostX64/${ARCH}
-    COMPILE=${MSTOOLS}/cl.exe
-    LINK=${MSTOOLS}/link.exe
-
     make_clean
     generate_includes_pyx || exit 2
     includes_pyx_to_c || exit $?
@@ -116,6 +119,9 @@ case $OSTYPE in
     WIN_KITS="${PF}\\Windows Kits\\10\\Lib\\10.0.18362.0"
     UCRTDIR="${WIN_KITS}\\ucrt\\$ARCH"
     UMDIR="${WIN_KITS}\\um\\$ARCH"
+    MSTOOLS=${MSVC}/bin/HostX64/${ARCH}
+    COMPILE=${MSTOOLS}/cl.exe
+    LINK=${MSTOOLS}/link.exe
 
     PYTHONDIR=$(cygpath -w "$PYTHONDIR")
 
