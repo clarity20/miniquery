@@ -2,7 +2,9 @@ import os
 import miniEnv as env
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from configobj import ConfigObj, ConfigObjError, flatten_errors
-from validate import Validator, VdtValueError
+from validate import Validator, VdtValueError, VdtTypeError, VdtValueTooLongError, \
+        VdtValueTooShortError, VdtValueTooBigError, VdtValueTooSmallError
+
 
 fakePass = '-1.a###0q'
 
@@ -19,6 +21,7 @@ class appSettings():
     def loadSettings(self, userSettingsFile):
         cfgSpec = os.path.join(env.MINI_CONFIG, 'configspec.cfg')
         validator = Validator()
+        msg = ''
 
         # Load the settings from the user-specific file if it is available.
         if os.path.isfile(userSettingsFile):
