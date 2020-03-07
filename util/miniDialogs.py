@@ -22,7 +22,6 @@ from prompt_toolkit.auto_suggest import DynamicAutoSuggest
 from prompt_toolkit.layout.margins import ScrollbarMargin, NumberedMargin
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.eventloop import run_in_executor
 from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.widgets import ProgressBar, Label, Box, TextArea, RadioList, Shadow, Frame, SearchToolbar
@@ -999,55 +998,6 @@ def radiolist_dialog(title='', text='', ok_text='Ok', cancel_text='Cancel',
         with_background=True)
 
     return _run_dialog(dialog, style, async_=async_)
-
-
-def progress_dialog(title='', text='', run_callback=None, style=None, async_=False):
-    """
-    :param run_callback: A function that receives as input a `set_percentage`
-        function and it does the work.
-    """
-    assert callable(run_callback)
-
-    progressbar = ProgressBar()
-    text_area = TextArea(
-        focusable=False,
-
-        # Prefer this text area as big as possible, to avoid having a window
-        # that keeps resizing when we add text to it.
-        height=D(preferred=10**10))
-
-    dialog = MiniDialog(
-        body=HSplit([
-            Box(Label(text=text)),
-            Box(text_area, padding=D.exact(1)),
-            progressbar,
-        ]),
-        title=title,
-        with_background=True)
-    app = _create_app(dialog, style)
-
-    def set_percentage(value):
-        progressbar.percentage = int(value)
-        app.invalidate()
-
-    def log_text(text):
-        text_area.buffer.insert_text(text)
-        app.invalidate()
-
-    # Run the callback in the executor. When done, set a return value for the
-    # UI, so that it quits.
-    def start():
-        try:
-            run_callback(set_percentage, log_text)
-        finally:
-            app.exit()
-
-    run_in_executor(start)
-
-    if async_:
-        return app.run_async()
-    else:
-        return app.run()
 
 
 def _run_dialog(dialog, style, async_=False):
