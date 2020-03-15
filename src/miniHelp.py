@@ -10,7 +10,7 @@ class HelpType(Enum):
 
 def giveMiniHelp():
     print('MINIQUERY')
-    print('Copyright (c) 2019 by Michael Wood\n')
+    print('Copyright (c) 2019-2020 by Miniquery AMDG, LLC\n')
     print('Usage:')
     print('    mini [options] [table] [query parts ...]')
     print('With no arguments, enters the MiniQuery command prompt.\n')
