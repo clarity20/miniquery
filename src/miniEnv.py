@@ -1,5 +1,5 @@
 import os
-import sys
+import platform
 
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 
@@ -18,7 +18,7 @@ def setEnv():
     global HOME, MINI_HOME, MINI_CACHE, MINI_CONFIG, MINI_OPTIONS
 
     # Load the optional-with-defaults settings
-    homeVariable = 'USERPROFILE' if sys.platform == 'win32' else 'HOME'
+    homeVariable = 'USERPROFILE' if platform.system() == 'Windows' else 'HOME'
     HOME = os.getenv(homeVariable)
     MINI_HOME = os.getenv('MINI_HOME', HOME + os.sep + 'miniquery')
     MINI_CACHE = os.getenv('MINI_CACHE', MINI_HOME + os.sep + 'cache')
