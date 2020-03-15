@@ -10,7 +10,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.styles import Style
 
 # MINIQUERY custom imports:
-sys.path.append("../src/")
+sys.path.append(".." + os.sep + "src")
 import miniEnv as env
 from includes import giveMiniHelp
 from includes import miniSettings as ms
@@ -21,7 +21,7 @@ from includes import queryProcessor
 from includes import miniDbConnection as dbConn
 from includes import stringToPrompt
 
-sys.path.append("../util")
+sys.path.append(".." + os.sep + "util")
 from utilIncludes import MiniCompleter
 from utilIncludes import CommandCompleter
 from utilIncludes import settingOptionsMap
@@ -40,7 +40,6 @@ def main():
     global args, setupPrompt
     global historyObject, userConfigFile
     global continuer, delimiter, endlineProtocol
-
     if '-h' in sys.argv or '--help' in sys.argv:
         giveMiniHelp()
         em.doExit()
@@ -77,7 +76,7 @@ def main():
         em.doExit()
 
     args.classify(sys.argv[1:])   # skip the program name
-
+    
     # The configs and the cache must be loaded before any commands are
     # processed. This is because the first cmd can be a sys cmd that needs
     # a list of tab-completion candidates that comes from the db schema.
@@ -140,10 +139,17 @@ def main():
             while 1:
                 print()
                 cmdCompleter = CommandCompleter([])
-                cmd = session.prompt(PS1Prompt if usePS1Prompt else PS2Prompt,
-                        style=promptStyle, enable_open_in_editor=True,
-                        editing_mode=ms.settings['Settings']['editMode'],
-                        completer=cmdCompleter, complete_while_typing=False)
+
+                editMode = ms.settings['Settings']['editMode']
+                cmd = session.prompt(
+                            PS1Prompt if usePS1Prompt else PS2Prompt,
+                            style=promptStyle,
+                            enable_open_in_editor=True,
+                            editing_mode=EditingMode.EMACS if editMode=='EMACS' 
+                                                        else EditingMode.VI,
+                            completer=cmdCompleter, 
+                            complete_while_typing=False
+                    )
 
                 # Is end-of-command detected?
                 if cmd.endswith(delimiter) or (
@@ -465,7 +471,7 @@ def doSource(argv):
                     em.doWarn()
                     break
     except FileNotFoundError:
-        print('Unable to open file ' + choice)
+        print('Unable to open file ' + fileName)
 
     return ReturnCode.SUCCESS
 
