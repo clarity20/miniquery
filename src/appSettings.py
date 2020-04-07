@@ -1,4 +1,6 @@
 import os
+import sys
+import platform
 import miniEnv as env
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
 from configobj import ConfigObj, ConfigObjError, flatten_errors
@@ -10,13 +12,18 @@ fakePass = '-1.a###0q'
 
 # This class manages the Miniquery program "settings" (not to be confused
 # with the database "configurations").
+# The settings include customizable user preferences as well as system
+# properties determined at startup such as the operating system type.
+# The customizable settings are stored in $MINI_CONFIG/mini.cfg.
+# They can be customized at the user level with $HOME/.minirc.
 
 class appSettings():
-    # The global program settings are stored in $MINI_CONFIG/mini.cfg.
-    # They can be customized at the user level with $HOME/.minirc.
 
     def __init__(self):
         self.settings = None
+        self.isInputTty = sys.stdin.isatty()
+        self.isOutputTty = sys.stdout.isatty()
+        self.ostype = platform.system()
 
     def loadSettings(self, userSettingsFile):
         cfgSpec = os.path.join(env.MINI_CONFIG, 'configspec.cfg')

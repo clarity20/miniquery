@@ -8,6 +8,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.styles import Style
+from prompt_toolkit.enums import EditingMode
 
 # MINIQUERY custom imports:
 sys.path.append(".." + os.sep + "src")
@@ -60,7 +61,7 @@ def main():
 
     # If the standard input has been redirected, execute its commands
     # and quickly exit, as in mysql
-    if not sys.stdin.isatty():
+    if not ms.isInputTty:
         oldTableName = ''
         while 1:
             cmd = sys.stdin.readline()
@@ -101,8 +102,9 @@ def main():
             em.doExit()
 
     # Prelude to the pseudo-infinite event loop
-    print_formatted_text(FormattedText([('lightgreen', '\nWELCOME TO MINIQUERY!\n')]))
-    print('Copyright (c) 2019 Miniquery AMDG, LLC')
+    welcomeColor = 'green' if ms.ostype == 'Windows' else 'lightgreen'
+    print_formatted_text(FormattedText([(welcomeColor, '\nWELCOME TO MINIQUERY!\n')]))
+    print('Copyright (c) 2020 Miniquery AMDG, LLC')
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
     # If there is a command or a query on the command line, accept it before starting the main loop
@@ -300,7 +302,7 @@ def doSql(sql):
         em.doWarn()
         return ReturnCode.SUCCESS  #TODO: Keep the "real" error code, here and elsewhere
 
-    # Detect "use" queries (database-switching)
+    # Update program state in the case of a "use" query (database-switching)
     if fullSql[:4].lower() == "use ":
         ms.settings['Settings']['database'] = fullSql[4:]
         ms.settings['Settings']['table'] = ''
@@ -343,7 +345,7 @@ def doSave(argv):
 
     if settingsChanged:
         # Save program settings, variables and aliases
-        if sys.stdout.isatty():
+        if ms.isOutputTty:
             choice = MiniFileDialog('Save Settings File', userConfigFile,
                     can_create_new=True) if argc<1 else argv[0]
             if not choice:

@@ -1,5 +1,4 @@
 import re
-import platform
 from prompt_toolkit.styles import Style
 
 from appSettings import miniSettings; ms = miniSettings
@@ -16,7 +15,7 @@ def stringToPrompt(s):
         ''        : 'white bold',
         # Fixed prompt styling:
         'sep'     : 'white',
-        'symbol'  : 'yellow bold' if platform.system() == 'Windows' else 'yellowgreen bold',
+        'symbol'  : 'orange bold' if ms.ostype == 'Windows' else 'yellowgreen bold',
         # Editable prompt styling:
         'program' : 'yellow bold',
     }

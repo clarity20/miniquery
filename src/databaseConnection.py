@@ -61,7 +61,7 @@ class databaseConnection():
         if cxnSettings[defType]['MINI_USER']:
             if not cxnSettings[defType]['MINI_PASSWORD'] and not self._gotPassword:
                 # In a tty (screen-interactive) situation, ask for a password
-                if sys.stdout.isatty():
+                if ms.isOutputTty:
                     msg ='Please enter password for user "{}": '.format(
                             cxnSettings[defType]['MINI_USER'])
                     cxnSettings[defType]['MINI_PASSWORD'] = prompt(
