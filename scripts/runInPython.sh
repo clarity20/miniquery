@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 
-# Runs the program as a python script (the "classic" way) by making an
-# executable temp copy of mini.py with the necessary edits. This way, we don't
-# have to do a full rebuild of the dependencies with every edit, which can take a little while.
+# The main source file (mini.py) is written to be immediately buildable into
+# an executable binary using the project's build scripts.
+# This script on the other hand will run Miniquery as a python script by making a
+# temporary copy of the main source file in which we edit the import statements
+# so the interpreter can find the modules the program needs to load. This way, we don't
+# have to do a full rebuild of the project every time we want to test something.
 
 WORKING_DIR=$HOME/projects/miniquery/scripts
 SOURCE_FILE=$WORKING_DIR/mini.py
 TEMP_SOURCE_FILE=$WORKING_DIR/temp_mini.py
+
+# Locate a python, giving preference to py3 over py
+PYTHON=$( { which python3 || which python; } 2>/dev/null) || { echo "ERROR: Python not found."; exit 2; }
 
 sed -r -e 's/includes(.*giveMini)/miniHelp\1/
 s/includes(.*Sett)/appSettings\1/
@@ -30,5 +36,7 @@ if grep -q [Ii]ncludes "${TEMP_SOURCE_FILE}"; then
 fi
 
 chmod a+x "${TEMP_SOURCE_FILE}"
-python3  "${TEMP_SOURCE_FILE}"  "$@"
+
+"$PYTHON"  "${TEMP_SOURCE_FILE}"  "$@"
+
 rm -f "${TEMP_SOURCE_FILE}"
