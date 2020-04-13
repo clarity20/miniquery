@@ -3,7 +3,7 @@
 function make_clean()
 {
     # Move previous files to "old" directory
-    if ! mv "${MINI_C}" "${MINI_EXE}" old 2>/dev/null; then
+    if ! mv "${GENERATED_CFILE}" "${EXECUTABLE}" "${BUILD_DIR}"/old 2>/dev/null; then
         echo WARNING: File backups failed. 2> /dev/null
         return 1
     fi
@@ -11,15 +11,15 @@ function make_clean()
 
 function generate_mini_c()
 {
-    "$CYTHON" -3 --embed "${MINI_PY}" -o "${MINI_C}"
+    "$CYTHON" -3 --embed "${SOURCE_FILE}" -o "${GENERATED_CFILE}"
 }
 
 ######## Platform-agnostic definitions ########
 
 PROJECT_DIR=${HOME}/projects/miniquery
 SCRIPT_DIR=${PROJECT_DIR}/scripts
-MINI_PY=${SCRIPT_DIR}/mini.py
-MINI_C=${SCRIPT_DIR}/mini.c
+BIN_DIR=${PROJECT_DIR}/bin
+SOURCE_FILE=${SCRIPT_DIR}/mini.py
 
 ######## Main code ########
 
@@ -27,8 +27,9 @@ case $OSTYPE in
   *android*)
 
     CYTHON=cython
-    BUILD_DIR=${SCRIPT_DIR}
-    MINI_EXE=${BUILD_DIR}/mini
+    BUILD_DIR=${SCRIPT_DIR}/build
+    GENERATED_CFILE=${BUILD_DIR}/mini.c
+    EXECUTABLE=${BUILD_DIR}/mini
 
     make_clean
     generate_mini_c || exit 2
@@ -36,25 +37,26 @@ case $OSTYPE in
     COMPILE=arm-linux-androideabi-clang
 
     # Generate EXE from C source file
-    "$COMPILE" -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o "${MINI_EXE}" "${MINI_C}" -lpython3.7m || exit 3
+    "$COMPILE" -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython3.7m || exit 3
 
-    strip "${MINI_EXE}" || exit 4
+    strip "${EXECUTABLE}" || exit 4
     ;;
 
   *linux*)
 
     CYTHON=cython
-    BUILD_DIR=${SCRIPT_DIR}
-    MINI_EXE=${BUILD_DIR}/mini
+    BUILD_DIR=${SCRIPT_DIR}/build
+    GENERATED_CFILE=${BUILD_DIR}/mini.c
+    EXECUTABLE=${BUILD_DIR}/mini
 
     make_clean
     generate_mini_c || exit 2
 
     COMPILE=gcc
 
-    "$COMPILE" -I /usr/include/python3.4m -L /usr/lib64 -o "${MINI_EXE}" "${MINI_C}" -lpython3.4m || exit 3
+    "$COMPILE" -I /usr/include/python3.4m -L /usr/lib64 -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython3.4m || exit 3
 
-    strip "${MINI_EXE}" || exit 4
+    strip "${EXECUTABLE}" || exit 4
     ;;
 
   *)
@@ -92,17 +94,19 @@ case $OSTYPE in
     fi
 
     PYTHONDIR=$(dirname "$PYTHON")
+    PYTHONDLL="$PYTHONDIR"/python${PYVERSION}.dll   # version-sensitive but not wordsize-sensitive
     CYTHON=$PYTHONDIR/Scripts/cython.exe
 
     # Squirrel away the generated files in a build directory
     BUILD_DIR=${SCRIPT_DIR}/build/temp.win32-${PYVERSION_DOT}/Release   # this name was set by cythonize
-    MINI_C=${BUILD_DIR}/mini.c
-    MINI_EXE=${BUILD_DIR}/mini${TARGET_ARCH:1}.exe    # force the name to contain either 32 or 64
-    MINI_OBJ=${MINI_EXE/%exe/obj}     # store OBJ alongside EXE
+    GENERATED_CFILE=${BUILD_DIR}/mini.c
+    EXECUTABLE=${BUILD_DIR}/mini${TARGET_ARCH:1}.exe    # force the name to contain either 32 or 64
+    MINI_OBJ=${EXECUTABLE/%exe/obj}     # store OBJ alongside EXE
 
     make_clean
     generate_mini_c || exit 2
 
+    # Prepare for compilation. Use windows-style pathnames.
     PF="C:\\Program Files (x86)"
     MSVC="${PF}\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.24.28314"
     MSVC_LIBS="${MSVC}\\lib\\${TARGET_ARCH}"
@@ -117,13 +121,15 @@ case $OSTYPE in
 
     # Compilation: Use naming conventions the compiler understands
     "$COMPILE" -I"$PYTHONDIR\\include" -I"$WINKIT_INC\\ucrt" -I"$MSVC\\include" \
-        -I"$WINKIT_INC\\shared" "${MINI_C}" -Fo: "${MINI_OBJ}" -Fe: "${MINI_EXE}" -link \
+        -I"$WINKIT_INC\\shared" "${GENERATED_CFILE}" -Fo: "${MINI_OBJ}" -Fe: "${EXECUTABLE}" -link \
 	"$PYTHONDIR\\libs\\python${PYVERSION}.lib" "$MSVC_LIBS\\libcmt.lib" \
 	"$MSVC_LIBS\\oldnames.lib" "$UMDIR\\kernel32.lib" "$MSVC_LIBS\\libvcruntime.lib" \
 	"$UCRTDIR\\libucrt.lib" "$UMDIR\\Uuid.lib"
 
-    # Move the essential built files to the top of this subtree.
-    cp "${MINI_EXE}" "${SOURCE_DIR}"/mini.exe
+    # Move the essential files to the project's "bin" subtree
+    mkdir -p "$BIN_DIR"
+    cp "$EXECUTABLE" "$BIN_DIR"/mini.exe
+    cp "$PYTHONDLL" "$BIN_DIR"
 
     ;;
 esac
