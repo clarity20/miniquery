@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 ######## Helper functions ########
 
 function make_clean()
@@ -9,7 +11,7 @@ function make_clean()
     fi
 }
 
-function generate_mini_c()
+function generate_c_file()
 {
     "$CYTHON" -3 --embed "${SOURCE_FILE}" -o "${GENERATED_CFILE}"
 }
@@ -17,9 +19,9 @@ function generate_mini_c()
 ######## Platform-agnostic definitions ########
 
 PROJECT_DIR=${HOME}/projects/miniquery
-SCRIPT_DIR=${PROJECT_DIR}/scripts
+SRC_DIR=${PROJECT_DIR}/scripts
 BIN_DIR=${PROJECT_DIR}/bin
-SOURCE_FILE=${SCRIPT_DIR}/mini.py
+SOURCE_FILE=${SRC_DIR}/mini.py
 
 ######## Main code ########
 
@@ -27,12 +29,12 @@ case $OSTYPE in
   *android*)
 
     CYTHON=cython
-    BUILD_DIR=${SCRIPT_DIR}/build
+    BUILD_DIR=${SRC_DIR}/build
     GENERATED_CFILE=${BUILD_DIR}/mini.c
     EXECUTABLE=${BUILD_DIR}/mini
 
     make_clean
-    generate_mini_c || exit 2
+    generate_c_file || exit 2
 
     COMPILE=arm-linux-androideabi-clang
 
@@ -45,12 +47,12 @@ case $OSTYPE in
   *linux*)
 
     CYTHON=cython
-    BUILD_DIR=${SCRIPT_DIR}/build
+    BUILD_DIR=${SRC_DIR}/build
     GENERATED_CFILE=${BUILD_DIR}/mini.c
     EXECUTABLE=${BUILD_DIR}/mini
 
     make_clean
-    generate_mini_c || exit 2
+    generate_c_file || exit 2
 
     COMPILE=gcc
 
@@ -73,11 +75,9 @@ case $OSTYPE in
     PYVERSION=${PYVERSION_DOT/./}
     case $BUILDTYPE in
         [Xx]86_64)
-            PYTHONDIR=Python$PYVERSION
             TARGET_ARCH=x64
 	    ;;
         [Xx]86)
-            PYTHONDIR=Python${PYVERSION}-32
             TARGET_ARCH=x32
 	    ;;
         *)
@@ -98,13 +98,13 @@ case $OSTYPE in
     CYTHON=$PYTHONDIR/Scripts/cython.exe
 
     # Squirrel away the generated files in a build directory
-    BUILD_DIR=${SCRIPT_DIR}/build/temp.win32-${PYVERSION_DOT}/Release   # this name was set by cythonize
+    BUILD_DIR=${SRC_DIR}/build/temp.win32-${PYVERSION_DOT}/Release   # this name was set by cythonize
     GENERATED_CFILE=${BUILD_DIR}/mini.c
-    EXECUTABLE=${BUILD_DIR}/mini${TARGET_ARCH:1}.exe    # force the name to contain either 32 or 64
-    MINI_OBJ=${EXECUTABLE/%exe/obj}     # store OBJ alongside EXE
+    EXECUTABLE=${BUILD_DIR}/mini${TARGET_ARCH:1}.exe    # indicate word size in the name
+    OBJECT_FILE=${EXECUTABLE/%exe/obj}     # store OBJ alongside EXE
 
     make_clean
-    generate_mini_c || exit 2
+    generate_c_file || exit 2
 
     # Prepare for compilation. Use windows-style pathnames.
     PF="C:\\Program Files (x86)"
@@ -121,12 +121,12 @@ case $OSTYPE in
 
     # Compilation: Use naming conventions the compiler understands
     "$COMPILE" -I"$PYTHONDIR\\include" -I"$WINKIT_INC\\ucrt" -I"$MSVC\\include" \
-        -I"$WINKIT_INC\\shared" "${GENERATED_CFILE}" -Fo: "${MINI_OBJ}" -Fe: "${EXECUTABLE}" -link \
+        -I"$WINKIT_INC\\shared" "${GENERATED_CFILE}" -Fo: "${OBJECT_FILE}" -Fe: "${EXECUTABLE}" -link \
 	"$PYTHONDIR\\libs\\python${PYVERSION}.lib" "$MSVC_LIBS\\libcmt.lib" \
 	"$MSVC_LIBS\\oldnames.lib" "$UMDIR\\kernel32.lib" "$MSVC_LIBS\\libvcruntime.lib" \
 	"$UCRTDIR\\libucrt.lib" "$UMDIR\\Uuid.lib"
 
-    # Move the essential files to the project's "bin" subtree
+    # Populate "bin" with the product-ready files
     mkdir -p "$BIN_DIR"
     cp "$EXECUTABLE" "$BIN_DIR"/mini.exe
     cp "$PYTHONDLL" "$BIN_DIR"
