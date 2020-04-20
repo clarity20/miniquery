@@ -1,4 +1,5 @@
 import sys
+import platform
 from enum import Enum
 from prompt_toolkit import print_formatted_text
 from prompt_toolkit.formatted_text import FormattedText
@@ -80,7 +81,10 @@ class ErrorManager:
 
     def doExit(self, msg=None):
         if self.errOutputStream.isatty() and self.returnCode.value:
-            color = 'lightgreen' if self.returnCode == ReturnCode.USER_EXIT else 'red'
+            if self.returnCode == ReturnCode.USER_EXIT:
+                color = 'green' if platform.system() == 'Windows' else 'lightgreen'
+            else:
+                color = 'red'
             print_formatted_text(FormattedText([(color, msg or self.errMsg)]),
                                 file=self.errOutputStream)
         else:

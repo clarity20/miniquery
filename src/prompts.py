@@ -9,26 +9,26 @@ from appSettings import miniSettings; ms = miniSettings
 def stringToPrompt(s):
 
     # stylePrefix holds the unchangeable aspects of the prompt style
-    # Style objects are order-agnostic.
+    # The order of the fields does not matter.
     stylePrefix = {
-        # User input styling:
+        # User input echo styling:
         ''        : 'white bold',
         # Fixed prompt styling:
         'sep'     : 'white',
-        'symbol'  : 'orange bold' if ms.ostype == 'Windows' else 'yellowgreen bold',
-        # Editable prompt styling:
-        'program' : 'yellow bold',
+        'symbol'  : 'blue' if ms.ostype == 'Windows' else 'yellowgreen bold',
+        # Styling for the "MINI" program name:
+        'program' : 'blue' if ms.ostype == 'Windows' else 'yellow bold',
     }
 
     # promptPrefix holds the unchangeable "MINI" prefix for the prompt.
-    # Prompt objects are order-sensitive.
+    # Prompt components are order-sensitive.
     promptPrefix = [
         ('class:sep'   , '----<['),
         ('class:program', '.MINI.'),
         ('class:sep'   , ']>----'),
         ]
 
-    # Data definitions for converting the string to a prompt. We want some
+    # Data definitions for converting the input string to a prompt. We want some
     # of these to be re-evaluated every time in case the prompt should change.
     attribs = {
         'p' : ('prompt', ms.settings['Settings']['promptSymbol']),
@@ -52,11 +52,11 @@ def stringToPrompt(s):
 
     isAttribute = False
 
-    # Initialize prompt and style with the unchanging prefixes
+    # Begin prompt and style with the hard-wired prefixes
     prompt1 = promptPrefix.copy()
     styleDict = stylePrefix.copy()
 
-    # Split 's' into alternating pieces of brace-protected variable names
+    # Split 's' into pieces that alternate between brace-protected variable names
     # and literal text. 'split()' inserts blanks to make edge cases easier.
     for word in re.split(r'\${(.|.:.[A-Z]*)}', s):
         if isAttribute:
@@ -93,7 +93,7 @@ def stringToPrompt(s):
             styleDict[attr] = styleDesc
             prompt1.append(('class:'+attr, value))
 
-        # The piece is nonempty and is literal text.
+        # The fragment is nonempty and is literal text.
         elif word:  # Do not bother adding an entry for an empty piece
             prompt1.append(('class:sep', word))
 
