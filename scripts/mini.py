@@ -377,11 +377,6 @@ def doHistory(argv):
     print("\n".join(l[0:min(available, requested)]))
     return ReturnCode.SUCCESS
 
-def doMode(argv):
-    # Not yet implemented
-    #settingsChanged = True
-    return ReturnCode.SUCCESS
-
 def doFormat(argv):
     argc = len(argv)
 
@@ -764,7 +759,6 @@ callbackList = [
     doSetDatabase,
     doSetTable,
     doClearTable,
-    #doMode,
     doFormat,
     doSet,
     doAlias,
