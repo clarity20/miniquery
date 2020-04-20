@@ -1,12 +1,9 @@
 experimental/
 # Do not archive files generated during the build.
 build/
-old/
-*.c
-*.so
-mini
+bin/
 # We might want to tweak the pyx manually, e.g. to configure different types of builds
-#*.pyx
+*.pyx
 
 #Byte-compiled files
 __pycache__/
