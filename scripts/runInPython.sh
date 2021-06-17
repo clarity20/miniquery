@@ -7,6 +7,11 @@
 # so the interpreter can find the modules the program needs to load. This way, we don't
 # have to do a full rebuild of the project every time we want to test something.
 
+if [[ "$1" == -k ]]; then
+    keepTempFile=YES
+    shift
+fi
+
 WORKING_DIR=$HOME/projects/miniquery/scripts
 SOURCE_FILE=$WORKING_DIR/mini.py
 TEMP_SOURCE_FILE=$WORKING_DIR/temp_mini.py
@@ -39,4 +44,6 @@ chmod a+x "${TEMP_SOURCE_FILE}"
 
 "$PYTHON"  "${TEMP_SOURCE_FILE}"  "$@"
 
-rm -f "${TEMP_SOURCE_FILE}"
+if [[ "$keepTempFile" != "YES" ]]; then
+    rm -f "${TEMP_SOURCE_FILE}"
+fi
