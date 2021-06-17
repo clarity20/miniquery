@@ -106,8 +106,7 @@ class DatabaseConfig:
         self.loadTableNames(filename)
         # When initializing a DB, go ahead and initialize its main table
         mainTableName = ms.settings['Settings']['table']
-        if mainTableName:
-            self.tables[mainTableName] = TableConfig(mainTableName, self)
+        self.tables[mainTableName] = TableConfig(mainTableName, self)
         return ReturnCode.SUCCESS
 
 
@@ -120,8 +119,8 @@ class TableConfig:
         self.tableName = tableName
         self.columnNames = []
         self.parent = parent     # reference to the containing db
-        self.setup()
-
+        if self.tableName:
+            self.setup()
         return
 
     def loadColumnNames(self, columnListFile,  metadataType = ''):
