@@ -34,7 +34,7 @@ def sqlTypeToInternalType(sqlType_0):
     elif sqlType == 'time':
         internalType = TokenType.TIME
     elif 'time' in sqlType:    #datetimes and timestamps
-        internalTime = TokenType.TIMESTAMP
+        internalType = TokenType.TIMESTAMP
     elif 'blob' in sqlType or 'text' in sqlType:
         internalType = TokenType.BLOB
     elif sqlType == 'set':
