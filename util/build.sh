@@ -4,10 +4,9 @@
 
 function make_clean() {
     # Move previous files to "old" directory
-    if ! mv "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}" "${BUILD_DIR}"/old 2>/dev/null; then
-        echo WARNING: File backups failed. 2> /dev/null
-        return 1
-    fi
+    for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
+        mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback: 2>/dev/null
+    done
 }
 
 function generate_cython_config() {

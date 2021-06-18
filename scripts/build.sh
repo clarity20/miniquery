@@ -5,16 +5,15 @@
 function make_clean()
 {
     # Move previous files to "old" directory
-    if ! mv "${GENERATED_CFILE}" "${EXECUTABLE}" "${BUILD_DIR}"/old 2>/dev/null; then
-        echo WARNING: File backups failed. 2> /dev/null
-        return 1
-    fi
+    for filename in "${GENERATED_CFILE}" "${EXECUTABLE}" ; do
+        mv "$filename" "${BUILD_DIR}"/old     # To suppress feedback: 2>/dev/null
+    done
 }
 
 function generate_c_file()
 {
     SOURCE_CONVERSION_SCRIPT=${SRC_DIR}/tempMiniForBuild.sh
-    TEMP_SOURCE_FILE=mini_edited_for_build.py
+    TEMP_SOURCE_FILE=${SRC_DIR}/mini_edited_for_build.py
 
     "${SOURCE_CONVERSION_SCRIPT}" "${SOURCE_FILE}" > "${TEMP_SOURCE_FILE}" || { echo "build.sh ERROR: mini.py conversion failed."; exit 3; }
     "$CYTHON" -3 --embed "${TEMP_SOURCE_FILE}" -o "${GENERATED_CFILE}"
@@ -104,7 +103,7 @@ case $OSTYPE in
     CYTHON=$PYTHONDIR/Scripts/cython.exe
 
     # Squirrel away the generated files in a build directory
-    BUILD_DIR=${SRC_DIR}/build/temp.win32-${PYVERSION_DOT}/Release   # this name was set by cythonize
+    BUILD_DIR=${SRC_DIR}/build/temp.win32-${PYVERSION_DOT}/Release   # this name was chosen by cythonize
     GENERATED_CFILE=${BUILD_DIR}/mini.c
     EXECUTABLE=${BUILD_DIR}/mini${TARGET_ARCH:1}.exe    # indicate word size in the name
     OBJECT_FILE=${EXECUTABLE/%exe/obj}     # store OBJ alongside EXE

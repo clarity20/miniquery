@@ -4,10 +4,9 @@
 
 function make_clean() {
     # Move previous files to "old" directory
-    if ! mv "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}" old 2>/dev/null; then
-        echo WARNING: File backups failed. 2> /dev/null
-        return 1
-    fi
+    for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
+        mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback:m 2>/dev/null
+    done
 }
 
 function generate_cython_config() {
@@ -20,7 +19,9 @@ function generate_cython_config() {
 }
 
 function generate_c_file() {
+    sed -i -e 's/miniGlobals /utilIncludes /' ${SRC_DIR}/argumentClassifier.py
     cython -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
+    sed -i -e 's/utilIncludes /miniGlobals /' ${SRC_DIR}/argumentClassifier.py
 }
 
 ######## Platform-agnostic definitions ########
@@ -66,7 +67,7 @@ case $OSTYPE in
     COMPILE=gcc
 
     make_clean
-    generate_cython_config ||exit 2
+    generate_cython_config || exit 2
     generate_c_file || exit 3
 
     "$COMPILE" -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python3.4m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
