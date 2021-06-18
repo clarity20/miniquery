@@ -8,7 +8,6 @@
 
 WORKING_DIR=$HOME/projects/miniquery/scripts
 SOURCE_FILE=$WORKING_DIR/mini.py
-TEMP_SOURCE_FILE=$WORKING_DIR/mini_edited_for_build.py
 
 # Locate python, giving preference to py3 over py
 PYTHON=$( { which python3 || which python; } 2>/dev/null) || { echo "ERROR: Python not found."; exit 2; }
@@ -46,7 +45,7 @@ utilIncludeImports=(
 append_to_edit_command  "includes"      "${includeImports[@]}"
 append_to_edit_command  "utilIncludes"  "${utilIncludeImports[@]}"
 
-sed -r -e "$fileEditCommand"  "${SOURCE_FILE}"  >  "${TEMP_SOURCE_FILE}"
+sed -r -e "$fileEditCommand"  "${SOURCE_FILE}"
 
 exit 0
 
