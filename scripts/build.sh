@@ -13,7 +13,12 @@ function make_clean()
 
 function generate_c_file()
 {
-    "$CYTHON" -3 --embed "${SOURCE_FILE}" -o "${GENERATED_CFILE}"
+    SOURCE_CONVERSION_SCRIPT=${SRC_DIR}/tempMiniForBuild.sh
+    TEMP_SOURCE_FILE=mini_edited_for_build.py
+
+    "${SOURCE_CONVERSION_SCRIPT}" "${SOURCE_FILE}" > "${TEMP_SOURCE_FILE}" || { echo "build.sh ERROR: mini.py conversion failed."; exit 3; }
+    "$CYTHON" -3 --embed "${TEMP_SOURCE_FILE}" -o "${GENERATED_CFILE}"
+    rm -f "${TEMP_SOURCE_FILE}"
 }
 
 ######## Platform-agnostic definitions ########
@@ -24,6 +29,9 @@ BIN_DIR=${PROJECT_DIR}/bin
 SOURCE_FILE=${SRC_DIR}/mini.py
 
 ######## Main code ########
+
+PYTHON="$( { which python3 || which python; } 2>/dev/null)" || { echo "ERROR: Python not found!"; exit 2; }
+PYVERSION_DOT="$("$PYTHON" --version | sed -r 's/Python (.\..*)\..*/\1/')"
 
 case $OSTYPE in
   *android*)
@@ -39,7 +47,7 @@ case $OSTYPE in
     COMPILE=arm-linux-androideabi-clang
 
     # Generate EXE from C source file
-    "$COMPILE" -I /data/data/com.termux/files/usr/include/python3.7m -L /data/data/com.termux/files/usr/lib -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython3.7m || exit 3
+    "$COMPILE" -I /data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -L /data/data/com.termux/files/usr/lib -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython${PYVERSION_DOT}m || exit 3
 
     strip "${EXECUTABLE}" || exit 4
     ;;
@@ -56,7 +64,7 @@ case $OSTYPE in
 
     COMPILE=gcc
 
-    "$COMPILE" -I /usr/include/python3.4m -L /usr/lib64 -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython3.4m || exit 3
+    "$COMPILE" -I /usr/include/python${PYVERSION_DOT}m -L /usr/lib64 -o "${EXECUTABLE}" "${GENERATED_CFILE}" -lpython${PYVERSION_DOT}m || exit 3
 
     strip "${EXECUTABLE}" || exit 4
     ;;
@@ -70,8 +78,6 @@ case $OSTYPE in
         exit 1
     fi
 
-    PYTHON="$( { which python3 || which python; } 2>/dev/null)" || { echo "ERROR: Python not found!"; exit 2; }
-    PYVERSION_DOT="$("$PYTHON" --version | sed -r 's/Python (.\..*)\..*/\1/')"
     PYVERSION=${PYVERSION_DOT/./}
     case $BUILDTYPE in
         [Xx]86_64)
@@ -122,9 +128,9 @@ case $OSTYPE in
     # Compilation: Use naming conventions the compiler understands
     "$COMPILE" -I"$PYTHONDIR\\include" -I"$WINKIT_INC\\ucrt" -I"$MSVC\\include" \
         -I"$WINKIT_INC\\shared" "${GENERATED_CFILE}" -Fo: "${OBJECT_FILE}" -Fe: "${EXECUTABLE}" -link \
-	"$PYTHONDIR\\libs\\python${PYVERSION}.lib" "$MSVC_LIBS\\libcmt.lib" \
-	"$MSVC_LIBS\\oldnames.lib" "$UMDIR\\kernel32.lib" "$MSVC_LIBS\\libvcruntime.lib" \
-	"$UCRTDIR\\libucrt.lib" "$UMDIR\\Uuid.lib"
+        "$PYTHONDIR\\libs\\python${PYVERSION}.lib" "$MSVC_LIBS\\libcmt.lib" \
+        "$MSVC_LIBS\\oldnames.lib" "$UMDIR\\kernel32.lib" "$MSVC_LIBS\\libvcruntime.lib" \
+        "$UCRTDIR\\libucrt.lib" "$UMDIR\\Uuid.lib"
 
     # Populate "bin" with the product-ready files
     mkdir -p "$BIN_DIR"
