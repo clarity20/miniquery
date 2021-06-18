@@ -13,20 +13,20 @@ from prompt_toolkit.enums import EditingMode
 # MINIQUERY custom imports:
 sys.path.append(".." + os.sep + "src")
 import miniEnv as env
-from includes import giveMiniHelp
-from includes import miniSettings as ms
-from includes import miniErrorManager as em, ReturnCode
-from includes import masterDataConfig as cfg
-from includes import argumentClassifier
-from includes import queryProcessor
-from includes import miniDbConnection as dbConn
-from includes import stringToPrompt
+from miniHelp import giveMiniHelp
+from appSettings import miniSettings as ms
+from errorManager import miniErrorManager as em, ReturnCode
+from configManager import masterDataConfig as cfg
+from argumentClassifier import argumentClassifier
+from queryProcessor import queryProcessor
+from databaseConnection import miniDbConnection as dbConn
+from prompts import stringToPrompt
 
 sys.path.append(".." + os.sep + "util")
-from utilIncludes import MiniCompleter
-from utilIncludes import CommandCompleter
-from utilIncludes import settingOptionsMap
-from utilIncludes import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog, MiniFileDialog
+from miniCompleter import MiniCompleter
+from commandCompleter import CommandCompleter
+from miniGlobals import settingOptionsMap
+from miniDialogs import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog, MiniFileDialog
 
 setupPrompt = True
 settingsChanged = False
@@ -749,7 +749,7 @@ def _unsetValueCommand(command, argv, objName, category):
 
 # Fcn names cannot be used until the fns have been defined, so this is 
 # way down here
-from utilIncludes import commandList
+from miniGlobals import commandList
 
 callbackList = [
     doSql,
