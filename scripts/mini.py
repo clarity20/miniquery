@@ -530,21 +530,21 @@ def doGet(argv):
         settingName = argv[0]
         if settingName == '*':
             for s in ms.settings['Settings'].items():
-                print(s[0] + ': ' + s[1])
+                print(s[0] + ': ' + str(s[1]))
             print()
             for s in ms.settings['ConnectionString'].items():
                 if isinstance(s[1], dict):
                     for s1 in s[1].items():
-                        print(s1[0] + ': ' + s1[1])
+                        print(s1[0] + ': ' + str(s1[1]))
                 else:
-                    print(s[0] + ': ' + s[1])
+                    print(s[0] + ': ' + str(s[1]))
         elif settingName in ms.settings['Settings']:
-            print(settingName + ': ' + ms.settings['Settings'][settingName])
+            print(settingName + ': ' + str(ms.settings['Settings'][settingName]))
         else:
             found = False
             for s in ms.settings['ConnectionString']:
                 if isinstance(s, dict) and settingName in s:
-                    print(settingName + ': ' + ms.settings['ConnectionString'][s][settingName])
+                    print(settingName + ': ' + str(ms.settings['ConnectionString'][s][settingName]))
                     found = True
                     break
             if not found:
