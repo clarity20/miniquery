@@ -19,7 +19,7 @@ class ReturnCode(Enum):
     USER_EXIT = 10
     DATABASE_CONNECTION_ERROR = 11
     MISSING_SETTINGS_FILE = 12
-    INVALID_QUERY_SYNTAX = 13
+    DB_DRIVER_RAISED_ERROR = 13
     PROMPT_ERROR = 14
     MISSING_PASSWORD = 15
     ILLEGAL_ARGUMENT = 16
@@ -42,7 +42,7 @@ errorMsgDict = {
     10 : '\nThank you for using MINIQUERY!\n',
     11 : 'Database connection error: {0}, {1}',
     12 : 'Application settings file "{0}" missing or unreadable.',
-    13 : 'Query syntax error: {0}, {1}',
+    13 : 'Error/exception thrown by {0} driver:\n  error type:   {1}\n  full type / desc: {2}\n  command:   {3}',
     14 : 'Illegal {0} "{1}" in prompt.',
     15 : 'Unable to prompt for password. Please specify it using "-p" option or config file.',
     16 : 'Illegal argument. {0} is required.',  # This should be specialized to the context

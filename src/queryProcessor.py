@@ -60,8 +60,12 @@ class queryProcessor:
         try:
             resultSet = conn.execute(text(self.query))
         except Exception as e:
-            return em.setError(ReturnCode.INVALID_QUERY_SYNTAX,
-                    type(e).__name__, e.args)
+            return em.setError(ReturnCode.DB_DRIVER_RAISED_ERROR,
+                    dbConn.getDialect(),
+                    type(e).__name__,
+                    e.args[0],
+                    e.statement
+                    )
 
         # Displaying a result set only makes sense for SELECTs that found stg
         if self.queryType != QueryType.SELECT:
@@ -115,7 +119,7 @@ class queryProcessor:
             # If necessary, widen columns to accommodate NULLs
             for col in range(columnCount):
                 if columnWidths[col] < 4:
-                    columnHasNull = True in [not row[col] for row in rows]
+                    columnHasNull = True in [not row[col] for row in rows]  #TODO "not..." is suspicious!
                     if columnHasNull:
                         columnWidths[col] = 4
 
@@ -130,7 +134,7 @@ class queryProcessor:
                 result = [format % tuple(columnHdrs)]
                 result.append('')
                 for row in rows:
-                    result.append(format % tuple([v or 'NULL' for v in row.values()]))
+                    result.append(format % tuple([v or 'NULL' for v in row.values()])) #TODO "NULL" is suspicious!
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
             elif 'wrap' in self.arguments.options:
