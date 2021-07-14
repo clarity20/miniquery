@@ -8,7 +8,7 @@ from databaseConnection import miniDbConnection as dbConn
 from errorManager import miniErrorManager as em
 from errorManager import ReturnCode
 
-class queryProcessor:
+class QueryProcessor:
 
     def __init__(self, arguments):
         self.query = ''
@@ -16,18 +16,16 @@ class queryProcessor:
         self.columnToSortBy = ''
         self.arguments = arguments
 
-    def process(self, sql=''):
+    def process(self, literalSql=''):
         ret = ReturnCode.SUCCESS
-        if sql:
-            self.query = sql
+        if literalSql:
+            self.query = literalSql
 
-            # Turn off echoing of literal SQL
-            try:
-                del self.arguments.options['q']
-            except KeyError:
-                pass
+            # When literal SQL is provided, assume user does not need it echoed
+            self.arguments._options.pop('q', None)
 
-            firstWord = sql.partition(' ')[0].lower()
+            # For implicit queries, figure out the query type
+            firstWord = literalSql.partition(' ')[0].lower()
             if firstWord in ['select', 'show', 'desc']:
                 self.queryType = QueryType.SELECT
             elif firstWord == 'update':
@@ -40,9 +38,9 @@ class queryProcessor:
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
                 return ret
-        if 'q' in self.arguments.options:
+        if 'q' in self.arguments._options:
             print(self.query)
-        if 'r' in self.arguments.options:
+        if 'r' in self.arguments._options:
             ret = self.runAndDisplayResult()
             if ret != ReturnCode.SUCCESS:
                 return ret
@@ -57,15 +55,14 @@ class queryProcessor:
         conn = dbConn.getConnection()
         if em.getError() != ReturnCode.SUCCESS:
             return em.getError()
+
+        # Try to execute the query, handling any exceptions thrown by the API.
+        # Further information about exceptions is available in the SQLAlchemy help and website.
+        from sqlalchemy.exc import DBAPIError
         try:
             resultSet = conn.execute(text(self.query))
-        except Exception as e:
-            return em.setError(ReturnCode.DB_DRIVER_RAISED_ERROR,
-                    dbConn.getDialect(),
-                    type(e).__name__,
-                    e.args[0],
-                    e.statement
-                    )
+        except DBAPIError as e:
+            return em.setException(e, "Error/exception thrown by %s driver" % dbConn.getDialect())
 
         # Displaying a result set only makes sense for SELECTs that found stg
         if self.queryType != QueryType.SELECT:
@@ -75,7 +72,7 @@ class queryProcessor:
 
         columnHdrs = resultSet.keys()
         columnCount = len(columnHdrs)
-        if 'tab' in self.arguments.options:
+        if 'tab' in self.arguments._options:
             print(*columnHdrs, sep='\t')
             format = '\t'.join(['%s']*columnCount)
             while True:
@@ -91,7 +88,7 @@ class queryProcessor:
             columnWidths = [max(types[i][2], len(columnHdrs[i])) # [2] = display_size
                             for i in range(columnCount)]
 
-            if 'vertical' in self.arguments.options:
+            if 'vertical' in self.arguments._options:
                 nameWidth = max([len(columnHdrs[i]) for i in range(columnCount)])
                 # Format is "column header : value" repeated over the columns.
                 # In the next line we precompute the format pieces and concat.
@@ -129,7 +126,7 @@ class queryProcessor:
             except OSError:
                 # Screen width is unavailable when stdout is not a tty (i.e. redirection)
                 screenWidth = 999999
-            if 'nowrap' in self.arguments.options or sum(columnWidths) + columnCount < screenWidth:
+            if 'nowrap' in self.arguments._options or sum(columnWidths) + columnCount < screenWidth:
                 format = " ".join(["%%-%ss" % l for l in columnWidths])
                 result = [format % tuple(columnHdrs)]
                 result.append('')
@@ -137,7 +134,7 @@ class queryProcessor:
                     result.append(format % tuple([v or 'NULL' for v in row.values()])) #TODO "NULL" is suspicious!
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
-            elif 'wrap' in self.arguments.options:
+            elif 'wrap' in self.arguments._options:
                 # Choose a helper column to make the wrap more readable
                 from appSettings import miniSettings; ms = miniSettings
                 try:
