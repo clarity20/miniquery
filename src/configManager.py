@@ -51,7 +51,7 @@ class MasterDataConfig:
 
     def changeDatabase(self, dbName):
         ''' Respond to a change of the main DB by lazy-loading its cfg '''
-        if not self.databases[dbName]:
+        if not self.databases.get(dbName):
             self.databases[dbName] = DatabaseConfig(dbName)
         return ReturnCode.SUCCESS
 
@@ -68,7 +68,7 @@ class MasterDataConfig:
 class DatabaseConfig:
     '''
     Wrapper to hold list of table names.
-    Plan: Add a ChainMap to group the table's column names together in one view.
+    TODO: Add a ChainMap to group the table's column names together in one view.
     This would help tremendously with completion in auto-join situations.
     '''
     def __init__(self, dbName):
