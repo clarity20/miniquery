@@ -5,6 +5,9 @@ Sample data
 
 `third-party/mywind`: an open-source version of the Northwind database
 
+`sakila`
+`world` : sample DBs provided with the mysql 8.x download
+
 Steps to prepare the cache for a database
 -----------------------------------------
 
