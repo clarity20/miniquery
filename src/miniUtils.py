@@ -16,7 +16,8 @@ class QueryType(Enum):
     SELECT = 0,
     UPDATE = 1,
     INSERT = 2,
-    DELETE = 3
+    DELETE = 3,
+    OTHER = 4     # CREATE, DROP, etc.
 
 def sqlTypeToInternalType(sqlType_0):
     sqlType_0, a, b = sqlType_0.partition(' ')

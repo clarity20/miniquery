@@ -17,8 +17,8 @@ from miniHelp import giveMiniHelp
 from appSettings import miniSettings as ms
 from errorManager import miniErrorManager as em, ReturnCode
 from configManager import masterDataConfig as cfg
-from argumentClassifier import argumentClassifier
-from queryProcessor import queryProcessor
+from argumentClassifier import ArgumentClassifier
+from queryProcessor import QueryProcessor, HiddenQueryProcessor
 from databaseConnection import miniDbConnection as dbConn
 from prompts import stringToPrompt
 
@@ -32,7 +32,7 @@ setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
 userConfigFile = ''
-args = argumentClassifier()
+args = ArgumentClassifier()
 
 #TODO non-writeable hist file gives an error!
 historyObject = None
@@ -85,7 +85,7 @@ def main():
         em.doExit()
 
     # In one-and-done mode, execute the cmd and exit
-    oneAndDoneMode = 'e' in args.options
+    oneAndDoneMode = 'e' in args._options
     if oneAndDoneMode:
         # Take everything after '-e' to be the command;
         # all option flags need to come *before* it
@@ -112,7 +112,7 @@ def main():
     if cmd.startswith(ms.settings['Settings']['leader']):
         dispatchCommand(cmd, '')
     elif cmd:
-        if args.mainTableName and args.wheres or args.updates or args.postSelects:
+        if args.mainTableName and args._argumentTree:     # args.wheres or args.updates or args.postSelects:
             dispatchCommand(cmd, '')
 
     histFileName = os.path.join(env.HOME, '.mini_history')
@@ -257,7 +257,7 @@ def dispatchCommand(cmd, oldTableName):
                 em.doExit()
             oldTableName = args.mainTableName
 
-        retValue = queryProcessor(args).process()
+        retValue = QueryProcessor(args).process()
         if retValue != ReturnCode.SUCCESS:
             # Warn the user the query cannot be processed and continue the command loop
             #TODO Verify that changed environments are actually re-loaded
@@ -294,10 +294,10 @@ def doSql(sql):
     # need to fall back on a few things like runMode, display format, ...
     # So we clear the options, copy the settings, and then run the query.
     global args, setupPrompt
-    args.options.clear()
-    args.backfillOptions()
+    args._options.clear()
+#TODO: removed this method    args.backfillOptions()
     fullSql = " ".join(sql)
-    retValue = queryProcessor(args).process(fullSql)
+    retValue = QueryProcessor(args).process(fullSql)
     if retValue != ReturnCode.SUCCESS:
         em.doWarn()
         return ReturnCode.SUCCESS  #TODO: Keep the "real" error code, here and elsewhere
@@ -405,13 +405,44 @@ def doSetDatabase(argv):
         em.setError(ReturnCode.Clarification)
         em.doWarn("Database is already " + currDbName + ".")
         return ReturnCode.SUCCESS
-    currDbName = dbName
-    ms.settings['Settings']['table'] = ''
-    cfg.changeDatabase(dbName)
-    # Run a "use" query to make the change effective
-    #TODO: Is this standard SQL?
-    queryProcessor(args).process("USE " + dbName)
-    args.mainTableName = ''
+
+    # Quietly run a "use" query to make the change effective.
+    # By doing this first, we will cleanly catch invalid DB names.
+    from sqlalchemy.exc import ProgrammingError, OperationalError
+    useDbSql = 'USE `%s`' % dbName
+    hiddenProcessor = HiddenQueryProcessor()
+    queryReturn = hiddenProcessor.process(useDbSql)
+
+    if queryReturn != ReturnCode.SUCCESS:
+        # An exception/error was raised.
+        exc = em.getException()
+        if not exc:
+            em.doWarn()
+            return ReturnCode.SUCCESS
+        elif isinstance(exc, OperationalError):
+            # The user probably specified a nonexistent DB. Offer to create one.
+            em.resetError()
+            if yes_no_dialog(title='Database not found',
+                             text='Database %s not found. Create?' % dbName):
+                createDbSql = "CREATE DATABASE %s" % dbName
+                queryReturn = hiddenProcessor.process(createDbSql)
+                if queryReturn == ReturnCode.SUCCESS:
+                    em.setError(ReturnCode.Clarification)
+                    em.doWarn("Database %s created." % dbName)
+            else:
+                # User declined to create a new DB
+                return ReturnCode.SUCCESS
+        elif isinstance(exc, ProgrammingError):
+            # The proposed db name is probably illegal. This is unlikely
+            # to happen since we now backquote it in the above USE query.
+            em.doWarn(msg='%s: Cannot switch to db "%s"' % (type(exc), dbName))
+            return ReturnCode.SUCCESS
+
+    # Complete the transition to the new / other DB
+    activeDb = cfg.setActiveDatabase(dbName)
+    ms.settings['Settings']['database'] = activeDb.dbName
+    ms.settings['Settings']['table'] = activeDb.config.get('anchorTable', '')
+    args.mainTableName = activeDb.config.get('anchorTable', '')
     # Update the prompt
     setupPrompt = True
     settingsChanged = True
@@ -420,14 +451,23 @@ def doSetDatabase(argv):
 def doSetTable(argv):
     global args, setupPrompt, settingsChanged
 
+    currDbName = ms.settings['Settings']['database']
+    tableList = cfg.databases[currDbName].tableNames
+    if not tableList:
+        em.setError(ReturnCode.Clarification)
+        em.doWarn("No tables for DB %s." % currDbName)
+        return ReturnCode.SUCCESS
+
     # Do not allow simple erasure of the table name. See doSetDatabase().
     if len(argv) == 0:
-        tableList = cfg.databases[ms.settings['Settings']['database']].tableNames
         tableName = MiniListBoxDialog(title='Select a table', itemList=tableList)
         if not tableName:
             return ReturnCode.SUCCESS
     else:
         tableName = argv[0]
+        if not tableName in tableList:
+            em.setError(ReturnCode.TABLE_NOT_FOUND)
+            em.doWarn()
 
     currTableName = ms.settings['Settings']['table']
     if tableName == currTableName:
@@ -435,7 +475,7 @@ def doSetTable(argv):
         em.doWarn("Table is already " + currTableName + ".")
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
-    cfg.databases[ms.settings['Settings']['database']].changeMainTable(tableName)
+    cfg.databases[currDbName].changeAnchorTable(tableName)
     args.mainTableName = tableName
     setupPrompt = True
     settingsChanged = True

@@ -27,6 +27,7 @@ class ReturnCode(Enum):
     CONFIG_FILE_FORMAT_ERROR = 18
     CONFIG_VALIDATION_ERROR = 19
     CONFIG_MISSING_REQUIRED_SECTION = 20
+    TABLE_NOT_FOUND = 21
 
 errorMsgDict = {
     0 : '',
@@ -49,7 +50,8 @@ errorMsgDict = {
     17 : '', # Reserved for mere warnings
     18 : 'Formatting error with config file {0}.',
     19 : 'Errors in config file {0}:\n{1}',
-    20 : 'Config file {0} is missing required section {1}.',
+    20 : 'Config file "{0}" is missing required section {1}.',
+    21 : 'Table "{0}" not found.',
     }
 
 class ErrorManager:

@@ -31,6 +31,7 @@ class MasterDataConfig:
     def __init__(self):
         # Set up a dictionary for the DB-specific configs
         self.databases = {}
+        self.activeDatabase = None
         # Make client explicitly call setup(). He should wait until
         # the app settings are ready
         #self.setup()
@@ -49,30 +50,30 @@ class MasterDataConfig:
 
         return ReturnCode.SUCCESS
 
-    def changeDatabase(self, dbName):
-        ''' Respond to a change of the main DB by lazy-loading its cfg '''
+    def setActiveDatabase(self, dbName):
+        ''' Lazy-load and point to the new main DB when it changes '''
         if not self.databases.get(dbName):
             self.databases[dbName] = DatabaseConfig(dbName)
-        return ReturnCode.SUCCESS
+        return self.databases[dbName]
 
     def setup(self):
+        ''' Load the list of DB names and the config of the main DB '''
         filename = "{}/{}".format(env.MINI_CACHE, 'databases')
         self.loadDatabaseNames(filename)
-        # Initialize the main DB
-        mainDbName = ms.settings['Settings']['database']
-        if mainDbName:
-            self.databases[mainDbName] = DatabaseConfig(mainDbName)
+        # Initialize the active DB
+        activeDbName = ms.settings['Settings']['database']
+        self.activeDatabase = self.setActiveDatabase(activeDbName)
         return ReturnCode.SUCCESS
-
 
 class DatabaseConfig:
     '''
-    Wrapper to hold list of table names.
+    Wrapper to hold a list of table names plus configs for each table.
     TODO: Add a ChainMap to group the table's column names together in one view.
     This would help tremendously with completion in auto-join situations.
     '''
     def __init__(self, dbName):
         self.dbName = dbName
+        self.config = {}
         self.tableNames = []
         self.tables = {}
         self.setup()
@@ -95,27 +96,37 @@ class DatabaseConfig:
 
         return ReturnCode.SUCCESS
 
-    def changeMainTable(self, tableName):
-        ''' Respond to a change of the main table by lazy-loading its cfg '''
-        if tableName not in self.tables:
+    def changeAnchorTable(self, tableName):
+        ''' Respond to a change of the anchor table by lazy-loading its cfg '''
+        if not self.tables.get(tableName):
             self.tables[tableName] = TableConfig(tableName, self)
         return ReturnCode.SUCCESS
 
     def setup(self):
         filename = "{}/{}/{}".format(env.MINI_CACHE, self.dbName, 'information_schema.tables')
         self.loadTableNames(filename)
-        # When initializing a DB, go ahead and initialize its main table
-        mainTableName = ms.settings['Settings']['table']
-        self.tables[mainTableName] = TableConfig(mainTableName, self)
+        # When initializing a DB, go ahead and initialize its anchor table
+        self.config = self.readDatabaseConfig()
+        anchorTableName = self.config.get('anchorTable')
+        if anchorTableName:
+            self.tables[anchorTableName] = TableConfig(anchorTableName, self)
         return ReturnCode.SUCCESS
 
+    def readDatabaseConfig(self):
+        ''' Reads the db-level config settings atop the config file '''
+        DB_CONFIG_SECTION_HEADER = 'DBCONFIG'
+
+        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, self.dbName)
+        dbLevelConfig = TableConfig(None, self)
+        dbLevelConfig.loadConfigForTable(configFile, DB_CONFIG_SECTION_HEADER)
+        return dbLevelConfig.config
 
 class TableConfig:
     '''
     Wrapper to hold list of column names AND the user settings for a single table.
     '''
     def __init__(self, tableName, parent):
-        self.config = {'standardColumns':'', 'primaryColumn':''}  # dict of k-v pairs
+        self.config = {'standardColumns':'', 'primaryColumn':''} if tableName else {}
         self.tableName = tableName
         self.columnNames = []
         self.parent = parent     # reference to the containing db
@@ -286,7 +297,7 @@ class TableConfig:
                                 # list and store it. In the column list, accept
                                 # a populated or an unpopulated table name column
                                 column = [item for item in
-                                    self.ColumnNames if item[0] == value]
+                                    self.columnNames if item[0] == value]
                                 if column and len(column) == 1:
                                     columnType = sqlTypeToInternalType(column[0][1])
                                     sCount = str(regexCount)
@@ -323,10 +334,8 @@ class TableConfig:
         except FileNotFoundError:
             print('Database config file "{}" not found. Using system defaults.'.format(configFile))
 
-        self.config['regexCount'] = regexCount
-
-        if 'mainTable' not in self.config.keys():
-            self.config['mainTable'] = tableName
+        if self.tableName:
+            self.config['regexCount'] = regexCount
 
         return ReturnCode.SUCCESS
 

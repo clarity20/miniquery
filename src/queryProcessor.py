@@ -7,16 +7,18 @@ from configManager import masterDataConfig as cfg
 from databaseConnection import miniDbConnection as dbConn
 from errorManager import miniErrorManager as em
 from errorManager import ReturnCode
+from argumentClassifier import ArgumentClassifier
 
 class QueryProcessor:
 
     def __init__(self, arguments):
         self.query = ''
-        self.queryType = QueryType.SELECT
+        self.queryType = QueryType.OTHER
         self.columnToSortBy = ''
         self.arguments = arguments
 
     def process(self, literalSql=''):
+        em.resetError()
         ret = ReturnCode.SUCCESS
         if literalSql:
             self.query = literalSql
@@ -38,6 +40,8 @@ class QueryProcessor:
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
                 return ret
+
+        # The query is now fully inflated and ready to be shown and/or run.
         if 'q' in self.arguments._options:
             print(self.query)
         if 'r' in self.arguments._options:
@@ -66,7 +70,7 @@ class QueryProcessor:
 
         # Displaying a result set only makes sense for SELECTs that found stg
         if self.queryType != QueryType.SELECT:
-            return
+            return ReturnCode.SUCCESS
         if resultSet.rowcount == 0:
             return em.setError(ReturnCode.EMPTY_RESULT_SET)
 
@@ -218,4 +222,13 @@ class QueryProcessor:
 
                 # The result has been fully printed out in chunks
                 return ReturnCode.SUCCESS
+
+class HiddenQueryProcessor(QueryProcessor):
+    '''
+    A processor for running "under the hood" queries not explicitly entered as commands
+    '''
+
+    def __init__(self):
+        arguments = ArgumentClassifier().addOption('r')
+        super().__init__(arguments)
 
