@@ -289,24 +289,3 @@ class ArgumentClassifier:
             defType = ms.settings['ConnectionString']['definitionType']
             ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
 
-#TODO: With defaults set in configspec.cfg for option()-type settings, the following should no longer be necessary.
-#        # Fall back on the program settings when certain important options
-#        # are not set on the command line
-#        self.backfill_options()
-#
-#    # Options coming from the command line have precedence over the program
-#    # settings. But we need to incorporate the latter in the final
-#    # '_options' vector if no option has been explicitly set.
-#    def backfill_options(self):
-#        if {'q','r'}.isdisjoint(set(self._options.keys())):
-#            mode = ms.settings['Settings']['runMode']
-#            if mode in ['query', 'both']:
-#                self._options['q'] = True
-#            if mode in ['run', 'both']:
-#                self._options['r'] = True
-#
-#        if {'tab','vertical','wrap','nowrap'}.isdisjoint(set(self._options.keys())):
-#            mode = ms.settings['Settings']['format']
-#            self._options['fmt'] = mode
-#
-
