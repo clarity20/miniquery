@@ -115,8 +115,11 @@ case $OSTYPE in
     PF="C:\\Program Files (x86)"
     MSVC="${PF}\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.24.28314"
     MSVC_LIBS="${MSVC}\\lib\\${TARGET_ARCH}"
-    WINKIT_INC="${PF}\\Windows Kits\\10\\Include\\10.0.18362.0"  # Windows kits are downloaded from Microsoft
-    WINKIT_LIBS="${PF}\\Windows Kits\\10\\Lib\\10.0.18362.0"
+    WINKIT_HOME="${PF}\\Windows Kits\\10"  # Windows Kits are downloaded from Microsoft
+    WINKIT_MANIFEST="$(cygpath "${WINKIT_HOME}")"/SDKManifest.xml
+    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)"/\1/p' "$WINKIT_MANIFEST")
+    WINKIT_INC="${WINKIT_HOME}\\Include\\${WINKIT_VERSION}"
+    WINKIT_LIBS="${WINKIT_HOME}\\Lib\\${WINKIT_VERSION}"
     UCRTDIR="${WINKIT_LIBS}\\ucrt\\$TARGET_ARCH"
     UMDIR="${WINKIT_LIBS}\\um\\$TARGET_ARCH"
     MSTOOLS=${MSVC}/bin/Host${HOST_ARCH}/${TARGET_ARCH}

@@ -30,11 +30,15 @@ BIN_DIR=${PROJECT_DIR}/bin
 
 ######## Main code ########
 
+PYTHON="$( { which python3 || which python; } 2>/dev/null)" || { echo "ERROR: Python not found!"; exit 2; }
+PYVERSION_DOT="$("$PYTHON" --version | sed -r 's/Python (.\..*)\..*/\1/')"
+MACHINE=`uname -m`
+
 case $OSTYPE in
   *android*)
 
     CYTHON=cython
-    BUILD_DIR=${SRC_DIR}/build/temp.linux-armv7l-3.7
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-armv7l-${PYVERSION_DOT}
     CYTHON_CFG_FILE=${SRC_DIR}/utilIncludes.pyx
     GENERATED_CFILE=${BUILD_DIR}/utilIncludes.c
     OBJECT_FILE=${BUILD_DIR}/utilIncludes.o
@@ -46,10 +50,10 @@ case $OSTYPE in
     generate_c_file || exit $?
 
     # Convert C source into .o object file
-    "$COMPILE" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python3.7m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
+    "$COMPILE" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
 
     # Generate DLL/.so from object file
-    "$COMPILE" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython3.7m -o "${SHARED_LIBRARY}" || exit 5
+    "$COMPILE" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
 
     strip "${SHARED_LIBRARY}" || exit 6
     ;;
@@ -57,7 +61,7 @@ case $OSTYPE in
   *linux*)
 
     CYTHON=cython
-    BUILD_DIR=${SRC_DIR}/build/temp.linux-x86_64-3.4m
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-x86_64-${PYVERSION_DOT}m
     CYTHON_CFG_FILE=${SRC_DIR}/utilIncludes.pyx
     GENERATED_CFILE=${BUILD_DIR}/utilIncludes.c
     OBJECT_FILE=${BUILD_DIR}/utilIncludes.o
@@ -83,8 +87,6 @@ case $OSTYPE in
         exit 1
     fi
 
-    PYTHON="$( { which python3 || which python; } 2>/dev/null)" || { echo "ERROR: Python not found!"; exit 2; }
-    PYVERSION_DOT="$("$PYTHON" --version | sed -r 's/Python (.\..*)\..*/\1/')"
     PYVERSION="${PYVERSION_DOT/./}"
     case $BUILDTYPE in
         [Xx]86_64)
@@ -123,8 +125,11 @@ case $OSTYPE in
     PF="C:\\Program Files (x86)"
     MSVC="${PF}\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.24.28314"
     MSVC_LIBS="${MSVC}\\lib\\${TARGET_ARCH}"
-    WINKIT_INC="${PF}\\Windows Kits\\10\\Include\\10.0.18362.0"  # Windows kits are downloaded from Microsoft
-    WINKIT_LIBS="${PF}\\Windows Kits\\10\\Lib\\10.0.18362.0"
+    WINKIT_HOME="${PF}\\Windows Kits\\10"  # Windows Kits are downloaded from Microsoft
+    WINKIT_MANIFEST="$(cygpath "${WINKIT_HOME}")"/SDKManifest.xml
+    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)"/\1/p' "$WINKIT_MANIFEST")
+    WINKIT_INC="${WINKIT_HOME}\\Include\\${WINKIT_VERSION}"
+    WINKIT_LIBS="${WINKIT_HOME}\\Lib\\${WINKIT_VERSION}"
     UCRTDIR="${WINKIT_LIBS}\\ucrt\\$TARGET_ARCH"
     UMDIR="${WINKIT_LIBS}\\um\\$TARGET_ARCH"
     MSTOOLS=${MSVC}/bin/Host${HOST_ARCH}/${TARGET_ARCH}
