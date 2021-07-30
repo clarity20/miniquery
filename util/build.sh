@@ -4,12 +4,15 @@
 
 function make_clean() {
     # Move previous files to "old" directory
+    echo Backing up older generated files
+    mkdir -p "${BUILD_DIR}"
     for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
         mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback: 2>/dev/null
     done
 }
 
 function generate_cython_config() {
+    echo Generating cython cfg file ${CYTHON_CFG_FILE}
     for fn in "${SRC_DIR}"/*.py; do
       bn=`basename "$fn"`
       if [[ ! "$bn" =~ ^(setup|include)\.py$ ]]; then
@@ -19,7 +22,9 @@ function generate_cython_config() {
 }
 
 function generate_c_file() {
+    echo Generating C file $GENERATED_CFILE
     "$CYTHON" -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
+    ls -l "$GENERATED_CFILE"
 }
 
 ######## Platform-agnostic definitions ########
@@ -42,7 +47,7 @@ case $OSTYPE in
     CYTHON_CFG_FILE=${SRC_DIR}/utilIncludes.pyx
     GENERATED_CFILE=${BUILD_DIR}/utilIncludes.c
     OBJECT_FILE=${BUILD_DIR}/utilIncludes.o
-    SHARED_LIBRARY=${SRC_DIR}/utilIncludes.cpython-37m.so
+    SHARED_LIBRARY=${BUILD_DIR}/utilIncludes.cpython-37m.so
     COMPILE=arm-linux-androideabi-clang
 
     make_clean
@@ -50,12 +55,15 @@ case $OSTYPE in
     generate_c_file || exit $?
 
     # Convert C source into .o object file
+    echo Compiling to object file
     "$COMPILE" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
 
     # Generate DLL/.so from object file
+    echo Creating shared object
     "$COMPILE" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
 
     strip "${SHARED_LIBRARY}" || exit 6
+    echo Finished.
     ;;
 
   *linux*)
@@ -65,7 +73,7 @@ case $OSTYPE in
     CYTHON_CFG_FILE=${SRC_DIR}/utilIncludes.pyx
     GENERATED_CFILE=${BUILD_DIR}/utilIncludes.c
     OBJECT_FILE=${BUILD_DIR}/utilIncludes.o
-    SHARED_LIBRARY=${SRC_DIR}/utilIncludes.so
+    SHARED_LIBRARY=${BUILD_DIR}/utilIncludes.so
     COMPILE=gcc
 
     make_clean
