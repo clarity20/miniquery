@@ -4,7 +4,7 @@
 
 function make_clean() {
     # Move previous files to "old" directory
-    echo Backing up older generated files
+    echo Backing up older generated files ...
     mkdir -p "${BUILD_DIR}"
     for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
         mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback: 2>/dev/null
@@ -12,7 +12,7 @@ function make_clean() {
 }
 
 function generate_cython_config() {
-    echo Generating cython cfg file ${CYTHON_CFG_FILE}
+    echo Generating cython cfg file ${CYTHON_CFG_FILE} ...
     for fn in "${SRC_DIR}"/*.py; do
       bn=`basename "$fn"`
       if [[ ! "$bn" =~ ^(setup|include)\.py$ ]]; then
@@ -22,7 +22,7 @@ function generate_cython_config() {
 }
 
 function generate_c_file() {
-    echo Generating C file $GENERATED_CFILE
+    echo Generating C file $GENERATED_CFILE ...
     # Accomodate dependencies on util library
     sed -i -e 's/miniGlobals /utilIncludes /' ${SRC_DIR}/argumentClassifier.py
     "$CYTHON" -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
@@ -40,13 +40,13 @@ BIN_DIR=${PROJECT_DIR}/bin
 
 PYTHON="$( { which python3 || which python; } 2>/dev/null)" || { echo "ERROR: Python not found!"; exit 2; }
 PYVERSION_DOT="$("$PYTHON" --version | sed -r 's/Python (.\..*)\..*/\1/')"
-MACHINE=`uname -m`
+MACHINE_ARCH=`uname -m`
 
 case $OSTYPE in
   *android*)
 
     CYTHON=cython
-    BUILD_DIR=${SRC_DIR}/build/temp.linux-${MACHINE}-${PYVERSION_DOT}
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-${MACHINE_ARCH}-${PYVERSION_DOT}
     CYTHON_CFG_FILE=${SRC_DIR}/includes.pyx
     GENERATED_CFILE=${BUILD_DIR}/includes.c
     OBJECT_FILE=${BUILD_DIR}/includes.o
@@ -58,11 +58,11 @@ case $OSTYPE in
     generate_c_file || exit 3
 
     # Convert C source into .o object file
-    echo Compiling to object file
+    echo Compiling to object file ...
     "$COMPILE" -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -Os -fPIC -I/data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
 
     # Generate DLL/.so from object file
-    echo Creating shared object
+    echo Creating shared object ...
     "$COMPILE" -shared -Wl,--fix-cortex-a8 -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
 
     strip "${SHARED_LIBRARY}" || exit 6
@@ -71,7 +71,7 @@ case $OSTYPE in
   *linux*)
 
     CYTHON=cython
-    BUILD_DIR=${SRC_DIR}/build/temp.linux-${MACHINE}-${PYVERSION_DOT}m
+    BUILD_DIR=${SRC_DIR}/build/temp.linux-${MACHINE_ARCH}-${PYVERSION_DOT}m
     CYTHON_CFG_FILE=${SRC_DIR}/includes.pyx
     GENERATED_CFILE=${SRC_DIR}/includes.c
     OBJECT_FILE=${BUILD_DIR}/includes.o
@@ -82,7 +82,10 @@ case $OSTYPE in
     generate_cython_config || exit 2
     generate_c_file || exit 3
 
+    echo Compiling to object file ...
     "$COMPILE" -pthread -fno-strict-aliasing -O2 -DNDEBUG -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -fPIC -I/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
+
+    echo Creating shared object ...
     "$COMPILE" -pthread -shared -Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld "${OBJECT_FILE}" -L/usr/lib64 -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
 
     strip "${SHARED_LIBRARY}" || exit 6
