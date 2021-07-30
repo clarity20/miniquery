@@ -21,7 +21,7 @@ class databaseConnection():
         if doParseString:
             # Look for either the form  xxx+  or  xxx:  at the onset of the string
             self._dialect = None
-            m = re.match('(.*?)[+:]', driverNameOrStr)
+            m = re.match('(.*?)[+:]', dialectNameOrStr)
             if m:
                 self._dialect = m.groups(0)
         else:
