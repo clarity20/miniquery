@@ -56,11 +56,11 @@ case $OSTYPE in
 
     # Convert C source into .o object file
     echo Compiling to object file
-    "$COMPILE" -mfloat-abi=softfp -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
+    "$COMPILE" -mfpu=vfpv3-d16 -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -march=armv7-a -mfpu=neon -mfloat-abi=softfp -mthumb -Os -fPIC -I/data/data/com.termux/files/usr/include/python${PYVERSION_DOT}m -c "${GENERATED_CFILE}" -o "${OBJECT_FILE}" || exit 4
 
     # Generate DLL/.so from object file
     echo Creating shared object
-    "$COMPILE" -shared -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib -march=armv7-a -Wl,--fix-cortex-a8 -L/data/data/com.termux/files/usr/lib -march=armv7-a -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
+    "$COMPILE" -shared -march=armv7-a -Wl,--fix-cortex-a8 -landroid-support -L/home/builder/.termux-build/_cache/android5-19b-arm-21-v3/sysroot/usr/lib "${OBJECT_FILE}" -L/data/data/com.termux/files/usr/lib -lpython${PYVERSION_DOT}m -o "${SHARED_LIBRARY}" || exit 5
 
     strip "${SHARED_LIBRARY}" || exit 6
     echo Finished.
