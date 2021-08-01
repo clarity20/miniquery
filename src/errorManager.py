@@ -28,6 +28,7 @@ class ReturnCode(Enum):
     CONFIG_VALIDATION_ERROR = 19
     CONFIG_MISSING_REQUIRED_SECTION = 20
     TABLE_NOT_FOUND = 21
+    FILE_NOT_WRITABLE = 22
 
 errorMsgDict = {
     0 : '',
@@ -52,6 +53,7 @@ errorMsgDict = {
     19 : 'Errors in config file {0}:\n{1}',
     20 : 'Config file "{0}" is missing required section {1}.',
     21 : 'Table "{0}" not found.',
+    # 22 : 'File "{0}" is not writable.',
     }
 
 class ErrorManager:
@@ -62,13 +64,13 @@ class ErrorManager:
         self._returnCode = ReturnCode.SUCCESS
         self._errOutputStream = sys.stderr
 
-    def setException(self, exc, msg):
+    def setException(self, exc, msg='', postMsg=''):
         '''
         A pretty flexible approach to exception handling that can make full use of the thrown exception object
         '''
         SQLALCHEMY_ERROR_TEMPLATE = '  error type:   {0}\n  full descr: {1}\n  SQL command:   {2}'
-
         from sqlalchemy.exc import DBAPIError
+
         self._exception = exc
         exceptionType = type(exc).__name__
 
@@ -78,6 +80,9 @@ class ErrorManager:
             # See the SQLAlchemy help pages and website for further information.
             self._errMsg = msg + ":\n" + SQLALCHEMY_ERROR_TEMPLATE.format(exceptionType, exc.args[0], exc.statement)
             self._returnCode = ReturnCode.DB_DRIVER_ERROR
+        elif isinstance(exc, PermissionError):
+            self._errMsg = "{}{} : {}{}".format(msg+": " if msg else '', exceptionType, exc.filename, ": "+postMsg if postMsg else '')
+            self._returnCode = ReturnCode.FILE_NOT_WRITABLE
         else:
             print('Handling for exception type %s not implemented yet.' % exceptionType)
 
