@@ -37,6 +37,22 @@ args = ArgumentClassifier()
 #TODO non-writeable hist file gives an error!
 historyObject = None
 
+class MiniFileHistory(FileHistory):
+    '''
+    A specialized FileHistory that handles file access issues gracefully
+    '''
+    def __init__(self, filename):
+        self._doStore = True
+        super(MiniFileHistory, self).__init__(filename)
+
+    def store_string(self, string: str):
+        if self._doStore:
+            try:
+                FileHistory.store_string(self, string)
+            except PermissionError as ex:
+                self._doStore = False
+                em.setException(ex, "Miniquery command history file", "Commands will not be saved.")
+
 def main():
     global args, setupPrompt
     global historyObject, userConfigFile
@@ -116,7 +132,7 @@ def main():
             dispatchCommand(cmd, '')
 
     histFileName = os.path.join(env.HOME, '.mini_history')
-    historyObject = FileHistory(histFileName)
+    historyObject = MiniFileHistory(histFileName)
     session = PromptSession(history = historyObject)
     oldTableName = ''
 
@@ -152,6 +168,8 @@ def main():
                             completer=cmdCompleter, 
                             complete_while_typing=False
                     )
+                if em.getException():
+                    em.doWarn()
 
                 # Is end-of-command detected?
                 if cmd.endswith(delimiter) or (
@@ -324,9 +342,13 @@ def doQuit(argv):
                     can_create_new=True)
             if not choice:
                 return ReturnCode.SUCCESS
+            # Try to write the config file
             userConfigFile = choice
             ms.settings.filename = userConfigFile
-            ms.settings.write()
+            if ms.settings.write() != ReturnCode.SUCCESS:
+                exc = em.getException()
+                em.doWarn()
+                return ReturnCode.SUCCESS
             settingsChanged = False
             return em.setError(ReturnCode.USER_EXIT)
         elif choice == None:     # User pressed Cancel
@@ -356,10 +378,19 @@ def doSave(argv):
         if choice:
             userConfigFile = choice
             ms.settings.filename = userConfigFile
-            ms.settings.write()
+            if ms.settings.write() != ReturnCode.SUCCESS:
+                exc = em.getException()
+                em.doWarn()
+                return ReturnCode.SUCCESS
             settingsChanged = False
     else:
         em.doWarn(msg='No unsaved changes.')
+
+    dbConfig = cfg.databases[ms.settings['Settings']['database']]
+    if 1: #TODO if dbConfig.configChanges:
+        # Save DB config and reset configChanges
+        if dbConfig.saveConfigChanges() != ReturnCode.SUCCESS:
+            em.doWarn()
     return ReturnCode.SUCCESS
 
 def doHistory(argv):
@@ -429,6 +460,8 @@ def doSetDatabase(argv):
                 if queryReturn == ReturnCode.SUCCESS:
                     em.setError(ReturnCode.Clarification)
                     em.doWarn("Database %s created." % dbName)
+                else:
+                    em.doWarn('Unable to create database %s.' % dbName)
             else:
                 # User declined to create a new DB
                 return ReturnCode.SUCCESS
@@ -469,10 +502,10 @@ def doSetTable(argv):
             em.setError(ReturnCode.TABLE_NOT_FOUND)
             em.doWarn()
 
-    currTableName = ms.settings['Settings']['table']
-    if tableName == currTableName:
+    currAnchorTable = ms.settings['Settings']['table']
+    if tableName == currAnchorTable:
         em.setError(ReturnCode.Clarification)
-        em.doWarn("Table is already " + currTableName + ".")
+        em.doWarn("Anchor table is already " + currAnchorTable + ".")
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
     cfg.databases[currDbName].changeAnchorTable(tableName)
@@ -485,6 +518,8 @@ def doClearTable(argv):
     global setupPrompt, settingsChanged
 
     ms.settings['Settings']['table']=''
+    currDbName = ms.settings['Settings']['database']
+    cfg.databases[currDbName].changeAnchorTable('')
     args.mainTableName = ''
     setupPrompt = True
     settingsChanged = True

@@ -10,7 +10,20 @@ from validate import Validator, VdtValueError, VdtTypeError, VdtValueTooLongErro
 
 fakePass = '-1.a###0q'
 
-# This class manages the Miniquery program "settings" (not to be confused
+class MiniConfigObj(ConfigObj):
+    # Init the superclass
+    def __init__(self, *args, **kwargs):
+        ConfigObj.__init__(self, *args, **kwargs)
+
+    # Protect config file writes against exceptions
+    def write(self, outfile=None, section=None):
+        try:
+            return ConfigObj.write(self, outfile, section)
+        except PermissionError as ex:
+            return em.setException(ex, "Unable to write: ")
+
+
+# The appSettings class manages the Miniquery program "settings" (not to be confused
 # with the database "configurations").
 # The settings include customizable user preferences as well as system
 # properties determined at startup such as the operating system type.
@@ -33,7 +46,7 @@ class appSettings():
         # Load the settings from the user-specific file if it is available.
         if os.path.isfile(userSettingsFile):
             try:
-                self.settings = ConfigObj(userSettingsFile, configspec=cfgSpec,
+                self.settings = MiniConfigObj(userSettingsFile, configspec=cfgSpec,
                         # file_error catches nonexistence of file
                         file_error=True)
                 
@@ -100,7 +113,7 @@ class appSettings():
         globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
         if os.path.isfile(globalSettingsFile):
             try:
-                self.settings = ConfigObj(globalSettingsFile, configspec=cfgSpec,
+                self.settings = MiniConfigObj(globalSettingsFile, configspec=cfgSpec,
                         file_error=True)
             except (ConfigObjError, IOError) as e:
                 return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, cfgSpec)
