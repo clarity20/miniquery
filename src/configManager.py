@@ -71,11 +71,23 @@ class DatabaseConfig:
     TODO: Add a ChainMap to group the table's column names together in one view.
     This would help tremendously with completion in auto-join situations.
     '''
+
+    DB_CONFIG_SECTION_HEADER = 'DBCONFIG'
+
     def __init__(self, dbName):
         self.dbName = dbName
         self.config = {}
         self.tableNames = []
         self.tables = {}
+
+        # Track which config attributes have changed since the last save, and whether to save them.
+        # This will tell us how the next save operation has to touch the DB config file.
+        #TODO: For now, we track just the 'anchorTable' to keep it in sync with
+        #TODO: settings['settings']['table']. If we set up a proper DB config
+        #TODO: wizard we would also keep track of *all* attributes which
+        #TODO: have changed so the user can choose which changes to save.
+        self.configChanges = dict()
+
         self.setup()
 
     def loadTableNames(self, tableListFile):
@@ -96,10 +108,17 @@ class DatabaseConfig:
 
         return ReturnCode.SUCCESS
 
-    def changeAnchorTable(self, tableName):
+    def changeAnchorTable(self, anchorTableName):
         ''' Respond to a change of the anchor table by lazy-loading its cfg '''
-        if not self.tables.get(tableName):
-            self.tables[tableName] = TableConfig(tableName, self)
+        if not self.tables.get(anchorTableName):
+            # Table not loaded. Time to lazy-load it.
+            self.tables[anchorTableName] = TableConfig(anchorTableName, self)
+        else:
+            # This table is already known to MINIQUERY. We are simply
+            # changing the choice of anchor table.
+            self.configChanges.add({'anchorTable':True})    # format={attrName : bDoSave}
+
+        self.config['anchorTable'] = anchorTableName
         return ReturnCode.SUCCESS
 
     def setup(self):
@@ -114,12 +133,105 @@ class DatabaseConfig:
 
     def readDatabaseConfig(self):
         ''' Reads the db-level config settings atop the config file '''
-        DB_CONFIG_SECTION_HEADER = 'DBCONFIG'
-
         configFile = "{}/{}.cfg".format(env.MINI_CONFIG, self.dbName)
         dbLevelConfig = TableConfig(None, self)
-        dbLevelConfig.loadConfigForTable(configFile, DB_CONFIG_SECTION_HEADER)
+        dbLevelConfig.loadConfigForTable(configFile, DatabaseConfig.DB_CONFIG_SECTION_HEADER)
         return dbLevelConfig.config
+
+    def _findSectionHeaderInConfigFile(self, data, sectionName):
+        lineCount = 0
+        foundSection = False
+        sectionHeader = '[{}]'.format(sectionName)
+        for line in data:
+            if line == sectionHeader:
+                foundSection = True
+                break
+            else:
+                lineCount += 1
+        if not foundSection:
+            #TODO: Use errorMgr for proper error handling
+            print('"%s" section missing from DB config file.' % sectionName)
+            return -1
+        return lineCount
+
+
+    def saveConfigChanges(self):
+        # The DB configs are too irregular to admit of easy manipulation through
+        # the ConfigObj class. So we go primitive: To save the config file
+        # we load it as a list of lines, modify the lines as appropriate, and
+        # resave the whole file.
+        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, self.dbName)
+
+        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, "foo")
+
+        with open(configFile, 'r') as configFp:
+            configLines = [l.rstrip() for l in configFp]
+
+        # Walk the collection of config changes, tweaking the lines of the config file
+        for changeItem in self.configChanges.items():
+            if isinstance(changeItem, dict):
+                # The current changeItem is actually the full set of config changes for
+                # a specific subsection (= table name). Find the subsection and change the lines therein.
+                tableName, changeDict = changeItem
+                sectionHeader = '[{}]'.format(tableName)
+
+                # Find the section header in the file lines
+                lineCount = self._findSectionHeaderInConfigFile(configLines, tableName)
+
+                # Now we are in the section
+                for line in configLines[lineCount:]:
+                    # If all changes have been found and processed, stop
+                    if not changeDict:
+                        break
+                    # Detect end of current section
+                    elif line.startswith('['):
+                        # end of section and not all entries of changeDict found
+                        #TODO: Use errorMgr for proper error handling
+                        print('Attributes not found in DB config: %s' % [x for x in changeDict.keys()])
+                        break
+                    # See if the current config line is one that needs to be changed
+                    else:
+                        key, eq, value = line.partition('=')
+                        if key in changeDict and changeDict[key] == True:
+                            # Edit the config line by pasting in the value from the "hot" table config
+                            value = self.tables[tableName].config[key]
+                            configLines[lineCount] = '{0}={1}'.format(key, value)
+                            lineCount += 1
+                            # Drop the change from the changeDict
+                            del changeDict[key]
+
+            else:
+                # The current changeItem is a key-value pair: (attributeName, bDoSave).
+                # Change the matching line in the special DBCONFIG section holding the db-level changes
+                attributeName, shouldSaveChange = changeItem
+
+                # Find the section header in the file lines
+                lineCount = self._findSectionHeaderInConfigFile(configLines, self.DB_CONFIG_SECTION_HEADER)
+
+                # Go through the section until we find the matching line
+                for line in configLines[lineCount:]:
+                    if line.startswith('['):
+                        # End of section and matching line not found
+                        print('Attribute %s not found in DB config' % attributeName)
+                        break
+                    else:
+                        # Set the value to be saved equal to the value in memory
+                        key, eq, value = line.partition('=')
+                        if key == attributeName and shouldSaveChange == True:
+                            value = self.config[key]
+                            configLines[lineCount] = '{0}={1}'.format(key, value)
+                            lineCount += 1
+
+        # Write the file and make sure the whole change set is emptied out / reset
+        try:
+            with open(configFile, 'w') as configFp:
+                for line in configLines:
+                    configFp.write("%s\n", line)
+        except PermissionError as ex:
+            return em.setException(ex, "Unable to write DB config file")
+
+        self.configChanges.clear()
+        return ReturnCode.SUCCESS
 
 class TableConfig:
     '''
@@ -218,14 +330,14 @@ class TableConfig:
                     elif line.startswith('#'):
                         continue
 
-                    # Require the format "attributeName=value"
+                    # Require the lines to have format "attributeName=value"
                     attribute, equalsSign, value = line.partition('=')
                     if not equalsSign:
                         continue
 
-                    # Branch on the attribute. First handle the cases that
-                    # pre-empt the regex state machine, namely, the "regex" and
-                    # "default..." attributes
+                    # Branch on the attribute. First handle the attribute names that
+                    # pre-empt the regex state machine, namely, the "default..."
+                    # and "regex" attributes
                     defaultAttr = re.match(r'default([A-Z].*)', attribute)
                     if defaultAttr:
                         regexMode = True
@@ -314,7 +426,7 @@ class TableConfig:
                         else:   # DEFAULT_INT, _FLOAT or _DATE
                             if attribute == 'range':
                                 regexCount -= 1
-                                #Store the numeric or calendar limits
+                                # Store the numeric or calendar limits
                                 if regexType == RegexType.DEFAULT_INT:
                                     match = re.match('([-]?[0-9]+)-([-]?[0-9]+)$', value)
                                 elif RegexType == RegexType.DEFAULT_FLOAT:
