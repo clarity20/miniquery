@@ -15,7 +15,7 @@ class MiniConfigObj(ConfigObj):
     def __init__(self, *args, **kwargs):
         ConfigObj.__init__(self, *args, **kwargs)
 
-    # Protect config file writes against exceptions
+    # Override write() to protect config file writes against exceptions
     def write(self, outfile=None, section=None):
         try:
             return ConfigObj.write(self, outfile, section)

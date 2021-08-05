@@ -34,7 +34,6 @@ continuer = ''; delimiter = ''; endlineProtocol = None
 userConfigFile = ''
 args = ArgumentClassifier()
 
-#TODO non-writeable hist file gives an error!
 historyObject = None
 
 class MiniFileHistory(FileHistory):
@@ -378,7 +377,7 @@ def doSave(argv):
         if choice:
             userConfigFile = choice
             ms.settings.filename = userConfigFile
-            if ms.settings.write() != ReturnCode.SUCCESS:
+            if ms.settings.write():    # Returns None on success. Do not use RC.SUCCESS here.
                 exc = em.getException()
                 em.doWarn()
                 return ReturnCode.SUCCESS
@@ -387,7 +386,7 @@ def doSave(argv):
         em.doWarn(msg='No unsaved changes.')
 
     dbConfig = cfg.databases[ms.settings['Settings']['database']]
-    if 1: #TODO if dbConfig.configChanges:
+    if dbConfig.configChanges:
         # Save DB config and reset configChanges
         if dbConfig.saveConfigChanges() != ReturnCode.SUCCESS:
             em.doWarn()

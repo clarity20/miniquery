@@ -109,15 +109,15 @@ class DatabaseConfig:
         return ReturnCode.SUCCESS
 
     def changeAnchorTable(self, anchorTableName):
-        ''' Respond to a change of the anchor table by lazy-loading its cfg '''
+        '''
+        Respond to a change of the anchor table by lazy-loading its cfg
+        '''
+
         if not self.tables.get(anchorTableName):
             # Table not loaded. Time to lazy-load it.
             self.tables[anchorTableName] = TableConfig(anchorTableName, self)
-        else:
-            # This table is already known to MINIQUERY. We are simply
-            # changing the choice of anchor table.
-            self.configChanges.add({'anchorTable':True})    # format={attrName : bDoSave}
 
+        self.configChanges['anchorTable'] = True    # format={attrName : bDoSave}
         self.config['anchorTable'] = anchorTableName
         return ReturnCode.SUCCESS
 
@@ -162,14 +162,12 @@ class DatabaseConfig:
         # resave the whole file.
         configFile = "{}/{}.cfg".format(env.MINI_CONFIG, self.dbName)
 
-        configFile = "{}/{}.cfg".format(env.MINI_CONFIG, "foo")
-
         with open(configFile, 'r') as configFp:
             configLines = [l.rstrip() for l in configFp]
 
         # Walk the collection of config changes, tweaking the lines of the config file
         for changeItem in self.configChanges.items():
-            if isinstance(changeItem, dict):
+            if isinstance(changeItem[1], dict):
                 # The current changeItem is actually the full set of config changes for
                 # a specific subsection (= table name). Find the subsection and change the lines therein.
                 tableName, changeDict = changeItem
@@ -179,7 +177,7 @@ class DatabaseConfig:
                 lineCount = self._findSectionHeaderInConfigFile(configLines, tableName)
 
                 # Now we are in the section
-                for line in configLines[lineCount:]:
+                for line in configLines[lineCount+1:]:
                     # If all changes have been found and processed, stop
                     if not changeDict:
                         break
@@ -195,38 +193,43 @@ class DatabaseConfig:
                         if key in changeDict and changeDict[key] == True:
                             # Edit the config line by pasting in the value from the "hot" table config
                             value = self.tables[tableName].config[key]
-                            configLines[lineCount] = '{0}={1}'.format(key, value)
-                            lineCount += 1
+                            configLines[lineCount+1] = '{0}={1}'.format(key, value)
                             # Drop the change from the changeDict
                             del changeDict[key]
+                        lineCount += 1
 
             else:
                 # The current changeItem is a key-value pair: (attributeName, bDoSave).
                 # Change the matching line in the special DBCONFIG section holding the db-level changes
                 attributeName, shouldSaveChange = changeItem
+                if not shouldSaveChange:
+                    continue
 
                 # Find the section header in the file lines
                 lineCount = self._findSectionHeaderInConfigFile(configLines, self.DB_CONFIG_SECTION_HEADER)
 
                 # Go through the section until we find the matching line
-                for line in configLines[lineCount:]:
+                for line in configLines[lineCount+1:]:
                     if line.startswith('['):
                         # End of section and matching line not found
                         print('Attribute %s not found in DB config' % attributeName)
                         break
                     else:
-                        # Set the value to be saved equal to the value in memory
                         key, eq, value = line.partition('=')
-                        if key == attributeName and shouldSaveChange == True:
+                        if key == attributeName:
+                            # Set the value to be saved equal to the value in memory
                             value = self.config[key]
-                            configLines[lineCount] = '{0}={1}'.format(key, value)
+                            configLines[lineCount+1] = '{0}={1}'.format(key, value)
+                            break
+                        else:
+                            # Keep searching
                             lineCount += 1
 
         # Write the file and make sure the whole change set is emptied out / reset
         try:
             with open(configFile, 'w') as configFp:
                 for line in configLines:
-                    configFp.write("%s\n", line)
+                    configFp.write("%s\n" % line)
         except PermissionError as ex:
             return em.setException(ex, "Unable to write DB config file")
 
