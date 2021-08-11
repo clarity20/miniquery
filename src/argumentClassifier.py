@@ -33,13 +33,6 @@ class ArgumentClassifier:
         """
         self.mainTableName = ''
         self._argumentTree = {}
-
-#TODO: In the new design scheme, these argument categories are jumping the gun...
-        self.wheres = []
-        self.updates = []
-        self.preSelects = []
-        self.postSelects = []
-
         self._operators = []
         self._literalSql = None    # Used in the special case of \sq commands
 
@@ -135,7 +128,7 @@ class ArgumentClassifier:
             self._operator = operator
             self._position = position
 
-    def classify(self, argList):     #TODO: Would *argList be better?
+    def classify(self, argList, isExplicitCommand=None):     #TODO: Would *argList be better?
         '''
         Determine whether the arguments denote a System Command or a Query Command,
         and (for query commands) whether the command is implicit or explicit.
@@ -155,22 +148,22 @@ class ArgumentClassifier:
         This class & method are about fully classifying the arguments. We do not
         attempt to derive their meanings here.
 
-        #TODO: This part might change:
-            Before calling this function, unravel all aliases and variables,
-            leaving a "flat" command, preceded by the Leader if explicit, then
-            shlex.split() it to convert to a list if not a list already.
+        Before calling this function, unravel all aliases and variables,
+        leaving a "flat" command, then
+        shlex.split() it to convert to a list if not a list already.
         '''
 
         if not argList:
             return None
 
-        leader = ms.settings['Settings']['leader']
-        commandName = argList[0].lstrip(leader).lower() if argList[0].startswith(leader) else None
-        isExplicitCommand = commandName is not None
-        argIndex = 1 if isExplicitCommand else 0
-        isQueryCommand = commandName in tqlCommands or not isExplicitCommand
+        if isExplicitCommand is None:
+            leader = ms.settings['Settings']['leader']
+            isExplicitCommand = argList[0].startswith(leader)
+            argList[0] = argList[0].lstrip(leader)
 
-#########TODO: tqlCommands in the above line needs to be (hard-)populated
+        self._commandName = argList[0].lower() if isExplicitCommand else None
+        argIndex = 1 if isExplicitCommand else 0
+        self._isQueryCommand = self._commandName in tqlCommands or not isExplicitCommand
 
         # Initialize the table name now if it's been set
         self.mainTableName = ms.settings['Settings']['table']
@@ -180,7 +173,7 @@ class ArgumentClassifier:
 
         # The 'sq' command has a special syntax: options followed by literal
         # SQL in that order with nothing else allowed.
-        if commandName == 'sq':
+        if self._commandName == 'sq':
             inOptions = True   # Accept options at the beginning and only there
             for arg in argList[argIndex:]:
                 if inOptions and re.match('-+\w', arg):
@@ -193,9 +186,16 @@ class ArgumentClassifier:
                     # as literal sql.
             #TODO: when to unravel MINI variables in the SQL?
                     self._literalSql = " ".join(argList[argIndex:])
+
+        # Other System commands that don't follow the arg-classifier paradigm
+        # require no further preprocessing
+        elif not self._isQueryCommand and self._commandName != 'help':
+            return True
+
+        # For TQL query commands we apply the main classifier logic
         else:
-            # For all other commands walk the argument list, accumulating
-            # arguments into lists by their prefix (including options, whose
+            # Walk the argument list, accumulating arguments into lists
+            # by their prefix (including options, whose
             # prefix is '-') and take note of operators (+= := etc.)
             for arg in argList[argIndex:]:
 
@@ -206,6 +206,8 @@ class ArgumentClassifier:
                 # If an option, process and continue
                 if re.fullmatch(r'-+', prefix):
                     op, eq, vl = word.partition('=')
+                    self._addOption(op, vl)
+                    continue
 
                 # Make note of any modification operators inside the arguments.
                 # These include += .= etc. Operators like <= and != are not modifiers.
@@ -216,7 +218,7 @@ class ArgumentClassifier:
                     self._operators.append(self.Operator(operator, cellNumber))
 
                 # For query commands, if the table is not set the first non-prefix argument is table name
-                if isQueryCommand and not prefix and not self.mainTableName:
+                if self._isQueryCommand and not prefix and not self.mainTableName:
                     self.mainTableName = word
                 # Otherwise store the argument in the prefix-based classification tree
                 else:
@@ -233,59 +235,4 @@ class ArgumentClassifier:
             ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
 
         return True
-
-
-
-
-    def OLDclassify(self, argList):
-        '''
-        Classify the command arguments as program options; the main table name;
-        or WHERE, UPDATE, or SELECT-clause particles.
-
-        This functionality is needed upon program invocation and also every time a
-        query is run in the main REPL loop, so it will be called in several places.
-        '''
-
-        self.NEWclassify(argList)
-
-        # Initialize the table name now if the data is available.
-        # This way, the first-argument, per-query table naming
-        # will only be in effect when there is no anchor table.
-        self.mainTableName = ms.settings['Settings']['table']
-
-        # Turn on the preconfigured settings first
-        for arg in split(env.MINI_OPTIONS) + argList:
-            if arg[0] == '-':
-                # Option arguments
-#TODO removed for testing:                op, eq, vl = arg.lstrip('-').partition('=')
-#TODO removed for testing:                self._addOption(op, vl)
-                pass
-            elif arg[0] == '+':
-                # Selection arguments
-                # basic formats: +x, ++x, +1x, ++1x
-                if arg[1] == '+':
-                    if arg[2] == '1':
-                        self.preSelects.append('+' + arg[3:])
-                    else:
-                        self.postSelects.append(arg[1:])
-                elif arg[1] == '1':
-                    self.preSelects.append(arg[2:])
-                else:
-                    self.postSelects.append(arg[1:])
-            #TODO: order by / group by
-            #elif arg[0] in ['/', '%']:
-                #pass
-            elif re.search('[+*/%:-]=', arg):
-                self.updates.append(arg)
-            elif not self.mainTableName:
-                self.mainTableName = arg
-            else:
-                self.wheres.append(arg)
-
-        # Kluge: For the password, give the option precedence over
-        # the config setting. The code that cares about this is in databaseCxn.py
-        # where "args" is not readily accessible. So we set the value here.
-        if 'p' in self._options:
-            defType = ms.settings['ConnectionString']['definitionType']
-            ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
 

@@ -1,29 +1,36 @@
 # Global program data
 
-# MINIQUERY commands and associated data:
-# With the exception of the callback associated with each command, all data
-# pertaining to MINIQUERY system commands is stored here. This is because
-# the callbacks have to be defined before we can reference them.
+# MINIQUERY command summaries:
+# All data pertaining to MINIQUERY system commands is stored here except for
+# the callbacks associated with the commands.
 #
-# MINIQUERY commands can be either explicit or implicit. Explicit commands are
-# those beginning with the "leader" prefix defined in the program settings. Any
-# input line that does NOT begin with the leader is taken to be an implicit
-# command.
-#
-# The implicit commands are a different form of TQL command that allow the
-# user to omit <leader>-commandName in front. (System commands have explicit
-# forms only.) For instance, the implicit "myTable +favoriteColumn" is
-# equivalent to the explicit "\select myTable +favoriteColumn".
-#
-# Explicit commands, on the other hand, are the sole means of invoking
-# MINIQUERY system commands.
-#
+# MINIQUERY commands consist of System commands and TQL/Query commands. (TQL is
+# the Terse Query Language that powers MINIQUERY.) Every command can be written
+# explicitly, and certain Query commands can also be written implicitly.
+# Explicit commands are those preceded by the "leader" as defined in
+# the program settings, followed by the command name; any command that does NOT
+# begin with <leader>-commandName is an implicit command. When an implicit
+# command is properly written, the corresponding explicit command can be
+# inferred from the syntax. For instance, the implicit "myTable +favoriteColumn"
+# is equivalent to the explicit "\select myTable +favoriteColumn".
+
+# Basic (i.e. DML) TQL commands: command names, generic argument summaries, description template
+tqlCommands = ['select', 'update', 'insert', 'delete']
+tqlArgumentSummaries = '<options / query particles>'
+tqlDescriptions = 'Transpile/run a TQL %s statement'
+
+# Extended TQL commands and arguments for the above description template #TODO: enable these later
+extendedTqlCommands= [
+#    ['crtable', 'create table'],
+#    ['altable', 'alter table'],
+#    ['dtable', 'drop table'],
+#    ['crdb', 'create database'],
+#    ['ddb', 'drop database'],
+]
+
 # Format of the command list: [command name, argument syntax, short description]
 # All 3 items are used together in the "help" command.
 # The first item is used for command (auto-)completion.
-tqlCommands = [
-    'select', '', ''
-    ]
 commandList = [
     ['sq',      '<query>',        'Execute a literal SQL statement'],
     ['quit',    '',               'Exit MINIQUERY'],

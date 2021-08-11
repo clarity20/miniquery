@@ -77,12 +77,11 @@ def main():
     # If the standard input has been redirected, execute its commands
     # and quickly exit, as in mysql
     if not ms.isInputTty:
-        oldTableName = ''
-        while 1:
+        while True:
             cmd = sys.stdin.readline()
             if not cmd:
                 break
-            retValue, oldTableName = dispatchCommand(cmd, oldTableName)
+            retValue = dispatchCommand(cmd)
 
             # Exit early if there is an incident
             if retValue != ReturnCode.SUCCESS:
@@ -107,14 +106,8 @@ def main():
         which = sys.argv.index('-e') + 1
         cmd = " ".join(sys.argv[which:])
 
-        # Miniquery command
-        if cmd.startswith(ms.settings['Settings']['leader']):
-            dispatchCommand(cmd, '')
-            em.doExit()
-        # Query
-        else:
-            dispatchCommand(cmd, '')
-            em.doExit()
+        dispatchCommand(cmd, '')
+        em.doExit()
 
     # Prelude to the pseudo-infinite event loop
     welcomeColor = 'green' if ms.ostype == 'Windows' else 'lightgreen'
@@ -133,7 +126,6 @@ def main():
     histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = MiniFileHistory(histFileName)
     session = PromptSession(history = historyObject)
-    oldTableName = ''
 
     cmdBuffer = []
     # Cache a few dictionary lookups which should not change very often:
@@ -187,101 +179,89 @@ def main():
         except EOFError:
             break
 
-        retValue, oldTableName = dispatchCommand(cmd, oldTableName)
+        retValue = dispatchCommand(cmd)
         if retValue == ReturnCode.USER_EXIT:
             break
 
     em.doExit()
 
-def dispatchCommand(cmd, oldTableName):
 
-    # Distinguish commands from queries by looking for the command prefix
+def _unravelAliases(cmd):
+    for a in ms.settings['Aliases']:
+        # We have an alias when the cmd "starts with" an alias.
+        # We have to recognize false "aliases" that are
+        # simply proper substrings of a longer command name
+        if cmd.startswith(a):
+            try:
+                isAlias = not cmd[len(a)].isalnum()
+            except IndexError:
+                isAlias = True
+            if isAlias:
+                cmd = cmd.replace(a, ms.settings['Aliases'][a], 1)
+                break
+    return cmd
+
+
+def _unravelVariables(cmd):
+    varName = ''
+    variable = re.search(r'\$(\w+)', cmd)
+    while variable:
+        varName = variable.group(1)
+        try:
+            cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
+        except KeyError:
+            print('Unknown variable "' + varName + '"')
+        variable = re.search(r'\$(\w+)', cmd)
+    return cmd
+
+
+def dispatchCommand(cmd):
+
+    # Flatten aliases and variables
     if cmd.startswith(ms.settings['Settings']['leader']):
         cmd = cmd.lstrip(ms.settings['Settings']['leader'])
-
-        # Resolve command aliases
-        for a in ms.settings['Aliases']:
-            # We have an alias when the cmd "starts with" an alias.
-            # We have to recognize false "aliases" that are
-            # simply proper substrings of a longer command name
-            if cmd.startswith(a):
-                try:
-                    isAlias = not cmd[len(a)].isalnum()
-                except IndexError:
-                    isAlias = True
-                if isAlias:
-                    cmd = cmd.replace(a, ms.settings['Aliases'][a], 1)
-                    break
-
-        # Substitute values in place of MINIQUERY variables
-        varName = ''
-        variable = re.search(r'\$(\w+)', cmd)
-        while variable:
-            varName = variable.group(1)
-            try:
-                cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
-            except KeyError:
-                print('Unknown variable "' + varName + '"')
-            variable = re.search(r'\$(\w+)', cmd)
-
-        argv = split(cmd)
-
-        # Call the function indicated by the first word
-        word = argv[0].lower()
-        try:
-            callback = callbackMap[word]
-        except KeyError:
-            print('Unknown command "'+ word + '"')
-            return ReturnCode.SUCCESS, oldTableName
-        result = callback(argv[1:])
-
-        if result == ReturnCode.SUCCESS:
-            return ReturnCode.SUCCESS, oldTableName
-        elif result == ReturnCode.USER_EXIT:
-            return ReturnCode.USER_EXIT, oldTableName
-        elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
-            # Allow the user to fix the connection settings and keep going.
-            #TODO One situation is a failed cxn due to bad cxn strings.
-            #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
-            em.doWarn()
-            return ReturnCode.SUCCESS, oldTableName
-        else:
-            print('Unrecognized return code for command "' + cmd + '"')
-            return ReturnCode.SUCCESS, oldTableName
-
-    # It's a query, not a command
+        isExplicitCommand = True
+        cmd = _unravelVariables(_unravelAliases(cmd))
     else:
-        argv = split(cmd)
+        isExplicitCommand = False
+        cmd = _unravelVariables(cmd)
 
-        # Substitute for variables as above
-        varName = ''
-        variable = re.search(r'\$(\w+)', cmd)
-        while variable:
-            varName = variable.group(1)
-            try:
-                cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
-            except KeyError:
-                print('Unknown variable "' + varName + '"')
-            variable = re.search(r'\$(\w+)', cmd)
-        if varName:
-            argv = split(cmd)
+    # Preprocess the command and distinguish system commands from queries
+    argv = split(cmd)
+    args.classify(argv, isExplicitCommand)
 
-        args.classify(argv)
-
-        # Reconfigure if/when the table name changes
-        if args.mainTableName != oldTableName:
-            if cfg.setup() != ReturnCode.SUCCESS:
-                em.doExit()
-            oldTableName = args.mainTableName
-
+    # Process the command as a query or as a system command
+    if args._isQueryCommand:
         retValue = QueryProcessor(args).process()
         if retValue != ReturnCode.SUCCESS:
             # Warn the user the query cannot be processed and continue the command loop
             #TODO Verify that changed environments are actually re-loaded
             em.doWarn()
-            return retValue, oldTableName
+            return retValue
+    else:
+        # Call the function indicated by the first word
+        try:
+            callback = callbackMap[args._commandName]
+        except KeyError:
+            print('Unknown command "'+ args._commandName + '"')
+            return ReturnCode.SUCCESS
+        result = callback(argv[1:])
 
-    return ReturnCode.SUCCESS, oldTableName
+        if result == ReturnCode.SUCCESS:
+            return ReturnCode.SUCCESS
+        elif result == ReturnCode.USER_EXIT:
+            return ReturnCode.USER_EXIT
+        elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
+            # Allow the user to fix the connection settings and keep going.
+            #TODO One situation is a failed cxn due to bad cxn strings.
+            #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
+            em.doWarn()
+            return ReturnCode.SUCCESS
+        else:
+            print('Unrecognized return code for command "' + cmd + '"')
+            return ReturnCode.SUCCESS
+
+    return ReturnCode.SUCCESS
 
 def doHelp(argv):
     if not argv:
@@ -535,14 +515,15 @@ def doSource(argv):
     print('Sourcing ' + fileName)
     try:
         with open(fileName, 'r') as sourceFp:
-            oldTableName = ''
             for line in sourceFp:
-                retValue, oldTableName = dispatchCommand(line, oldTableName)
+                retValue = dispatchCommand(line)
                 if retValue != ReturnCode.SUCCESS:
                     em.doWarn()
                     break
     except FileNotFoundError:
-        print('Unable to open file ' + fileName)
+        print('Cannot find file ' + fileName)
+    except PermissionError:
+        print('Not permissioned to read file ' + fileName)
 
     return ReturnCode.SUCCESS
 
