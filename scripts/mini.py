@@ -90,7 +90,7 @@ def main():
         # Exit at EOF
         em.doExit()
 
-    args.classify(sys.argv[1:])   # skip the program name
+    args = args.classify(sys.argv[1:])   # skip the program name
     
     # The configs and the cache must be loaded before any commands are
     # processed. This is because the first cmd can be a sys cmd that needs
@@ -232,6 +232,7 @@ def _unravelVariables(cmd):
 
 
 def dispatchCommand(cmd):
+    global args
 
     # Flatten aliases and variables
     if cmd.startswith(ms.settings['Settings']['leader']):
@@ -244,7 +245,7 @@ def dispatchCommand(cmd):
 
     # Preprocess the command and distinguish system commands from queries
     argv = split(cmd)
-    args.classify(argv, isExplicitCommand)
+    args = args.classify(argv, isExplicitCommand)
 
     # Process the command as a query or as a system command
     if args._isQueryCommand:
