@@ -203,15 +203,31 @@ def _unravelAliases(cmd):
 
 
 def _unravelVariables(cmd):
-    varName = ''
-    variable = re.search(r'\$(\w+)', cmd)
-    while variable:
-        varName = variable.group(1)
-        try:
-            cmd = re.sub('\$'+varName, ms.settings['Variables'][varName], cmd)
-        except KeyError:
-            print('Unknown variable "' + varName + '"')
-        variable = re.search(r'\$(\w+)', cmd)
+    while True:
+        # We accept {}-protected variable names as well as unprotected ones.
+        # For the latter, we will opt for the longest variable name, so that if
+        # both "a" and "ab" exist, then "$ab" is equivalent to ${ab} not ${a}b
+        protectedVariable = re.search(r'\${(\w+)}', cmd)
+        if protectedVariable:
+            varName = protectedVariable.group(1)
+            try:
+                cmd = re.sub(re.escape(protectedVariable.group(0)), ms.settings['Variables'][varName], cmd)
+            except KeyError:
+                print('Unknown variable "' + varName + "'")
+                return cmd
+        nakedVariable = re.search(r'\$(\w+)', cmd)
+        if nakedVariable and ms.settings['Variables']:
+            containingString = nakedVariable.group(1)
+            maxNameVariable = ('','')
+            for var in ms.settings['Variables'].items():
+                if containingString.startswith(var[0]) and var[0].startswith(maxNameVariable[0]):
+                    maxNameVariable = var
+            if maxNameVariable[0]:
+                cmd = re.sub(re.escape(nakedVariable.group(0)), maxNameVariable[1], cmd)
+
+        if not (protectedVariable or nakedVariable):
+            break
+
     return cmd
 
 
