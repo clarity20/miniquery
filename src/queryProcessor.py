@@ -1,5 +1,5 @@
 import os
-
+import re
 from sqlalchemy.sql import text
 
 from miniUtils import QueryType
@@ -13,9 +13,9 @@ class QueryProcessor:
 
     def __init__(self, arguments):
         self.query = ''
-        self.queryType = QueryType.OTHER
-        self.columnToSortBy = ''
-        self.arguments = arguments
+        self._queryType = QueryType.OTHER
+        self._columnToSortBy = ''
+        self._arguments = arguments
 
     def process(self, literalSql=''):
         em.resetError()
@@ -24,35 +24,106 @@ class QueryProcessor:
             self.query = literalSql
 
             # When literal SQL is provided, assume user does not need it echoed
-            self.arguments._options.pop('q', None)
+            self._arguments._options.pop('q', None)
 
             # For implicit queries, figure out the query type
             firstWord = literalSql.partition(' ')[0].lower()
             if firstWord in ['select', 'show', 'desc']:
-                self.queryType = QueryType.SELECT
+                self._queryType = QueryType.SELECT
             elif firstWord == 'update':
-                self.queryType = QueryType.UPDATE
+                self._queryType = QueryType.UPDATE
             elif firstWord == 'delete':
-                self.queryType = QueryType.DELETE
+                self._queryType = QueryType.DELETE
             elif firstWord == 'insert':
-                self.queryType = QueryType.INSERT
+                self._queryType = QueryType.INSERT
         else:
+            self._queryType = self.deduceQueryType()
+            ret = em.getError()
+            if ret == ReturnCode.INCONSISTENT_QUERY_TYPES:
+                return ret
+
             ret = self.inflateQuery()
             if ret != ReturnCode.SUCCESS:
                 return ret
 
         # The query is now fully inflated and ready to be shown and/or run.
-        if 'q' in self.arguments._options:
+        if 'q' in self._arguments._options:
             print(self.query)
-        if 'r' in self.arguments._options:
+        if 'r' in self._arguments._options:
             ret = self.runAndDisplayResult()
             if ret != ReturnCode.SUCCESS:
                 return ret
         return ret
 
+    def deduceQueryType(self):
+        '''
+        Deduce the query type from the two indicators and ensure they are consistent.
+        The indicators are (1) the command name / query type option flag and
+        (2) the modification operators (if any) appearing in the query particles.
+        Note: SELECT queries should not have modification operators.
+        '''
+
+        # Note the command name or the query-type option flag
+        cmdName = self._arguments._commandName.upper()
+        if cmdName:
+            typeHint1 = getattr(QueryType, cmdName)
+        elif 'i' in self._arguments._options:
+            typeHint1 = QueryType.INSERT
+        elif 'u' in self._arguments._options:
+            typeHint1 = QueryType.UPDATE
+        elif 'd' in self._arguments._options:
+            typeHint1 = QueryType.DELETE
+        #TODO Consider adding option flags for non-DML query types
+        else:
+            # No flag for SELECTs since they are the default.
+            # Consider them to be unidentified thus far
+            typeHint1 = QueryType.OTHER
+
+        # Note any modification operators
+        typeHint2 = QueryType.OTHER
+        op = None
+        for o in self._arguments._operators:
+            previousHint2 = typeHint2
+            previousOp = op
+            op = o._operator
+            # Convention: DML operators have length 2, DDL have length 3
+            if len(op) == 2:
+                if o._operator == '.=':
+                    typeHint2 = QueryType.INSERT
+                elif o._operator == '\=':
+                    # The DELETE operator. To the user it doesn't make a whole lot of sense
+                    # semantically unless it stands alone in its containing argument, which
+                    # makes it redundant with the type hint already examined above.
+                    #TODO: Let us accept it in both safety modes but require it only in "safe mode".
+                    typeHint2 = QueryType.DELETE
+                elif re.fullmatch(r'[:+\-*/%]=', o._operator):
+                    typeHint2 = QueryType.UPDATE
+            else:
+                # Operator length > 2. This means it's a DDL command or it's
+                # one of the obscure arithmetic update operators <<= or >>=.
+                #TODO: Fill this in later
+                pass
+
+            # If some operators indicate different query types, it's an error
+            if previousHint2 != typeHint2 and previousHint2 != QueryType.OTHER:
+                return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, previousOp, op)
+
+        # Once all the operators have been examined, if the type is still marked
+        # OTHER then there there were NO operators. SELECTs, and only SELECTs,
+        # have no operators.
+        if typeHint1 == QueryType.OTHER and typeHint2 == QueryType.OTHER:
+            queryType = QueryType.SELECT
+        elif typeHint1 == typeHint2:
+            queryType = typeHint1
+        else:
+            return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, msgOverride="Query type is ambiguous, please check operators and flags.")
+
+        return queryType
+
+
     def inflateQuery(self):
         self.query = "SELECT * from customers LIMIT 4" #TODO MMMM WHERE id >= 3"
-        self.queryType = QueryType.SELECT
+        self._queryType = QueryType.SELECT
         return ReturnCode.SUCCESS
 
     def runAndDisplayResult(self):
@@ -69,14 +140,14 @@ class QueryProcessor:
             return em.setException(e, "Error/exception thrown by %s driver" % dbConn.getDialect())
 
         # Displaying a result set only makes sense for SELECTs that found stg
-        if self.queryType != QueryType.SELECT:
+        if self._queryType != QueryType.SELECT:
             return ReturnCode.SUCCESS
         if resultSet.rowcount == 0:
             return em.setError(ReturnCode.EMPTY_RESULT_SET)
 
         columnHdrs = resultSet.keys()
         columnCount = len(columnHdrs)
-        if 'tab' in self.arguments._options:
+        if 'tab' in self._arguments._options:
             print(*columnHdrs, sep='\t')
             format = '\t'.join(['%s']*columnCount)
             while True:
@@ -92,7 +163,7 @@ class QueryProcessor:
             columnWidths = [max(types[i][2], len(columnHdrs[i])) # [2] = display_size
                             for i in range(columnCount)]
 
-            if 'vertical' in self.arguments._options:
+            if 'vertical' in self._arguments._options:
                 nameWidth = max([len(columnHdrs[i]) for i in range(columnCount)])
                 # Format is "column header : value" repeated over the columns.
                 # In the next line we precompute the format pieces and concat.
@@ -130,7 +201,7 @@ class QueryProcessor:
             except OSError:
                 # Screen width is unavailable when stdout is not a tty (i.e. redirection)
                 screenWidth = 999999
-            if 'nowrap' in self.arguments._options or sum(columnWidths) + columnCount < screenWidth:
+            if 'nowrap' in self._arguments._options or sum(columnWidths) + columnCount < screenWidth:
                 format = " ".join(["%%-%ss" % l for l in columnWidths])
                 result = [format % tuple(columnHdrs)]
                 result.append('')
@@ -138,7 +209,7 @@ class QueryProcessor:
                     result.append(format % tuple([v or 'NULL' for v in row.values()])) #TODO "NULL" is suspicious!
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
-            elif 'wrap' in self.arguments._options:
+            elif 'wrap' in self._arguments._options:
                 # Choose a helper column to make the wrap more readable
                 from appSettings import miniSettings; ms = miniSettings
                 try:
@@ -146,11 +217,11 @@ class QueryProcessor:
                     tableCfg = dbCfg.tables[ms.settings['Settings']['table']]
                 except KeyError:
                     pass
-                if self.columnToSortBy:
+                if self._columnToSortBy:
                     # Look up the sorting column in the header by name. For this
                     # to work in the case of aliases, the sort column must hold
                     # the alias name, not the true name
-                    helpColumn = columnHdrs.index(self.columnToSortBy)
+                    helpColumn = columnHdrs.index(self._columnToSortBy)
                 elif tableCfg and tableCfg.config['primaryColumn']:
                     helpColumn = columnHdrs.index(tableCfg.config['primaryColumn'])
                 else:
