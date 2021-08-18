@@ -131,30 +131,31 @@ class ArgumentClassifier:
     def classify(self, argList, isExplicitCommand=None):     #TODO: Would *argList be better?
         '''
         Determine whether the arguments denote a System Command or a Query Command,
-        and (for query commands) whether the command is implicit or explicit.
+        and whether the command is implicit or explicit.
         If there is a table-name argument, identify it.
         Sort the other arguments into sublists according to their prefixes.
 
         Option-type arguments are flagged by the "-" prefix for both System and
-        Query commands. Here we construct the full option list by appending the
+        Query commands. Here we construct a command's full option list by appending the
         explicitly-provided options to the options implied by the program settings.
         We also enforce some mutual exclusivity restrictions that apply to certain
         families of options.
 
         Non-option-type arguments can occur in the case of Query Commands and
         can have various prefixes and special embedded operators. We sort them
-        by prefix and note the operators.
+        by prefix and catalogue the operators.
 
-        This class & method are about fully classifying the arguments. We do not
-        attempt to derive their meanings here.
+        This class & method are about fully classifying the arguments into a
+        convenient data structure. We do not attempt to derive
+        the arguments' meanings here.
 
         Before calling this function, unravel all aliases and variables,
         leaving a "flat" command, then
-        shlex.split() it to convert to a list if not a list already.
+        shlex.split() it to convert to a list of words if not a list already.
         '''
 
         if not argList:
-            return None
+            return self
 
         if isExplicitCommand is None:
             leader = ms.settings['Settings']['leader']
@@ -184,13 +185,12 @@ class ArgumentClassifier:
                     inOptions = False
                     # Beyond the last option, every argument is to be treated
                     # as literal sql.
-            #TODO: when to unravel MINI variables in the SQL?
                     self._literalSql = " ".join(argList[argIndex:])
 
         # Other System commands that don't follow the arg-classifier paradigm
         # require no further preprocessing
         elif not self._isQueryCommand and self._commandName != 'help':
-            return True
+            return self
 
         # For TQL query commands we apply the main classifier logic
         else:
@@ -234,5 +234,5 @@ class ArgumentClassifier:
             defType = ms.settings['ConnectionString']['definitionType']
             ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
 
-        return True
+        return self
 
