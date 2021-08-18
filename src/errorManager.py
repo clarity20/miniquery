@@ -29,6 +29,7 @@ class ReturnCode(Enum):
     CONFIG_MISSING_REQUIRED_SECTION = 20
     TABLE_NOT_FOUND = 21
     FILE_NOT_WRITABLE = 22
+    INCONSISTENT_QUERY_TYPES =23
 
 errorMsgDict = {
     0 : '',
@@ -54,6 +55,7 @@ errorMsgDict = {
     20 : 'Config file "{0}" is missing required section {1}.',
     21 : 'Table "{0}" not found.',
     # 22 : 'File "{0}" is not writable.',
+    23 : 'Operators {0}, {1} indicate inconsistent query types.',
     }
 
 class ErrorManager:
