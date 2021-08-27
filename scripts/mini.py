@@ -1,7 +1,6 @@
 import os
 import sys
 import re
-from shlex import split
 from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
@@ -104,15 +103,14 @@ def main():
         # Take everything after '-e' to be the command;
         # all option flags need to come *before* it
         which = sys.argv.index('-e') + 1
-        cmd = " ".join(sys.argv[which:])
-
+        cmd = _regularizeCommandLine(sys.argv[which:])
         dispatchCommand(cmd, '')
         em.doExit()
 
-    # Prelude to the pseudo-infinite event loop
+    # Prelude to the main event loop
     welcomeColor = 'green' if ms.ostype == 'Windows' else 'lightgreen'
     print_formatted_text(FormattedText([(welcomeColor, '\nWELCOME TO MINIQUERY!\n')]))
-    print('Copyright (c) 2020 Miniquery AMDG, LLC')
+    print('Copyright (c) 2019-2021 Miniquery AMDG, LLC')
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
     # If there is a command or a query on the command line, accept it before starting the main loop
@@ -134,7 +132,7 @@ def main():
     endlineProtocol = ms.settings['Settings']['endlineProtocol']
 
     # The infinite event loop: Accept and dispatch MINIQUERY commands
-    while 1:
+    while True:
 
         if setupPrompt:    # Initialize or update the prompt
             PS1Prompt, styleDict = stringToPrompt(ms.settings['Settings']['prompt'])
@@ -145,7 +143,7 @@ def main():
         # The command buffering loop: Keep buffering command fragments
         # according to the line protocol until a complete command is received
         try:
-            while 1:
+            while True:
                 print()
                 cmdCompleter = CommandCompleter([])
 
@@ -184,6 +182,92 @@ def main():
             break
 
     em.doExit()
+
+
+def _regularizeCommandLine(argv):
+    '''
+    Commands typed at the shell prompt are intercepted by the shell, where word
+    splitting and expansion occur before MINIQUERY sees them; commands entered in
+    the REPL-loop are seen exactly as typed. Here we process the former to resemble
+    the latter so that subsequent processing can be agnostic of the difference.
+    '''
+
+    # Quote arguments which must have been quote-stripped by the shell. We take this
+    # to mean arguments containing whitespace.
+    for arg in argv:
+        m = re.search(r'\s', arg)
+        if m.group(0):
+            # Wrap the argument in (strong) quotes
+            arg = re.sub(r'^', "'", re.sub(r'$', "'", arg))
+
+    # Merge into a cmd line string
+    cmd = " ".join(argv)
+
+    return cmd
+
+
+def _commandToWordList(cmd):
+    '''
+    Splits a command string into a list that can be arg-classify()'d.
+    This routine is custom-made to handle escape sequences and our subquery syntax.
+    '''
+
+    QUOTES = '{"\'}'   # normal quotes plus subquery delimiters
+
+    word = ''
+    words = []
+    quoteBuffer = []    # Only track {}s and outermost quotes
+    isEscaped = False
+
+    for c in cmd:
+        if isEscaped or c == '\\':
+            # Escape sequences have greatest precedence and are left untouched
+            word += c
+            isEscaped = not isEscaped
+        elif c in QUOTES:
+            previousQuote = quoteBuffer[-1] if quoteBuffer else ''
+            if c == '"' or c == "'":
+                if '{' in quoteBuffer:
+                    # Inside {}, treat quotes as normal characters
+                    word += c
+                elif quoteBuffer:
+                    if c == previousQuote:
+                        # This is a close-quote. Toss it and unbuffer its partner.
+                        del quoteBuffer[-1]
+                    else:
+                        # This is a literal quote character inside a quoted sequence
+                        word += c
+                else:
+                    # This is an open-quote.
+                    quoteBuffer += c
+            elif c == '{':
+                # Track all {}s
+                quoteBuffer += c
+                word += c
+            else:   # c == '}'
+                if previousQuote == '{':
+                    del quoteBuffer[-1]
+                word += c
+        elif c.isspace():
+            if quoteBuffer:
+                # Preserve protected whitespace
+                word += c
+            elif word:
+                # Treat whitespace as word delimiter
+                words.append(word)
+                word = ''
+        else:
+            # Preserve normal characters
+            word += c
+
+    if word:
+        words.append(word)
+
+    if quoteBuffer:
+        em.setError(ReturnCode.UNBALANCED_PARENTHESES_OR_SYMBOLS, cmd)
+        return [cmd]
+
+    return words
 
 
 def _unravelAliases(cmd):
@@ -244,7 +328,10 @@ def dispatchCommand(cmd):
         cmd = _unravelVariables(cmd)
 
     # Preprocess the command and distinguish system commands from queries
-    argv = split(cmd)
+    argv = _commandToWordList(cmd)
+    if em.getError() != ReturnCode.SUCCESS:
+        em.doWarn()
+        return em.getError()
     args = args.classify(argv, isExplicitCommand)
 
     # Process the command as a query or as a system command
@@ -281,6 +368,18 @@ def dispatchCommand(cmd):
     return ReturnCode.SUCCESS
 
 def doHelp(argv):
+
+#help() TODO:
+#    > Add these:
+#      *ab{brev}           : Define an object-name abbreviation
+#      *tutor              : Detailed MINIQUERY tutorial starting with very simple queries
+#    > Add a list of TOPICS such as the prompt and how to write MINI-queries.
+#    > Add a list of cmdline opts/flags with a few general instructions as follows:
+#      Flags with values must be written -x=1234, i.e. equal sign with no spaces.
+#        e: one-and-done, followed ONLY by the command. Any other option flags must precede the -e.
+#        p: password (Useful when stdout is redirected; then, without a PW the program errors-out)
+#        2v/3v: logic       a,o: conjunction
+
     if not argv:
         print('\nMINIQUERY COMMANDS:\n')
         ldr = ms.settings['Settings']['leader']
@@ -304,12 +403,8 @@ def doHelp(argv):
     return ReturnCode.SUCCESS
 
 def doSql(sql):
-    # Most of the classified args should not apply here. But we still
-    # need to fall back on a few things like runMode, display format, ...
-    # So we clear the options, copy the settings, and then run the query.
     global args, setupPrompt
     args._options.clear()
-#TODO: removed this method    args.backfillOptions()
     fullSql = " ".join(sql)
     retValue = QueryProcessor(args).process(fullSql)
     if retValue != ReturnCode.SUCCESS:
