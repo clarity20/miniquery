@@ -15,7 +15,7 @@ class ReturnCode(Enum):
     INVALID_TYPE = 6
     DESCRIPTION_FILE_READ = 7
     INVALID_DATE = 8
-    UNBALANCED_PARENTHESES = 9
+    UNBALANCED_PARENTHESES_OR_SYMBOLS = 9
     USER_EXIT = 10
     DATABASE_CONNECTION_ERROR = 11
     MISSING_SETTINGS_FILE = 12
@@ -41,7 +41,7 @@ errorMsgDict = {
     6 : 'Invalid type for expression "{0}".',
     7 : 'Cannot read {0} description file "{1}".',
     8 : 'Invalid date expression.',
-    9 : 'Error: Unbalanced parentheses in argument {0}.',
+    9 : 'Error: Unbalanced parentheses or symbols in argument "{0}".',
     10 : '\nThank you for using MINIQUERY!\n',
     11 : 'Database connection error: {0}, {1}',
     12 : 'Application settings file "{0}" missing or unreadable.',
@@ -55,7 +55,7 @@ errorMsgDict = {
     20 : 'Config file "{0}" is missing required section {1}.',
     21 : 'Table "{0}" not found.',
     # 22 : 'File "{0}" is not writable.',
-    23 : 'Operators {0}, {1} indicate inconsistent query types.',
+    23 : 'Terms/symbols "{0}" and "{1}" indicate inconsistent query types.',
     }
 
 class ErrorManager:

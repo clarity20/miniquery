@@ -63,41 +63,40 @@ class QueryProcessor:
         Note: SELECT queries should not have modification operators.
         '''
 
-        # Note the command name or the query-type option flag
-        cmdName = self._arguments._commandName.upper()
+        # Note the command name or the query-type option flag and the query type thereby implied
+        cmdName = self._arguments._commandName
         if cmdName:
-            typeHint1 = getattr(QueryType, cmdName)
+            indicator1, typeHint1 = cmdName, getattr(QueryType, cmdName.upper())
         elif 'i' in self._arguments._options:
-            typeHint1 = QueryType.INSERT
+            indicator1, typeHint1 = '-i', QueryType.INSERT
         elif 'u' in self._arguments._options:
-            typeHint1 = QueryType.UPDATE
+            indicator1, typeHint1 = '-u', QueryType.UPDATE
         elif 'd' in self._arguments._options:
-            typeHint1 = QueryType.DELETE
+            indicator1, typeHint1 = '-d', QueryType.DELETE
         #TODO Consider adding option flags for non-DML query types
         else:
             # No flag for SELECTs since they are the default.
-            # Consider them to be unidentified thus far
-            typeHint1 = QueryType.OTHER
+            # Consider the  query type to be unidentified thus far
+            indicator1, typeHint1 = 'select', QueryType.OTHER
 
-        # Note any modification operators
-        typeHint2 = QueryType.OTHER
+        # Note any modification operators and the query types thereby implied
+        indicator2, typeHint2 = 'select', QueryType.OTHER
         op = None
         for o in self._arguments._operators:
-            previousHint2 = typeHint2
-            previousOp = op
+            previousIndicator2, previousHint2 = op, typeHint2
             op = o._operator
             # Convention: DML operators have length 2, DDL have length 3
             if len(op) == 2:
-                if o._operator == '.=':
-                    typeHint2 = QueryType.INSERT
-                elif o._operator == '\=':
+                if op == '.=':
+                    indicator2, typeHint2 = op, QueryType.INSERT
+                elif op == '\=':
                     # The DELETE operator. To the user it doesn't make a whole lot of sense
                     # semantically unless it stands alone in its containing argument, which
                     # makes it redundant with the type hint already examined above.
                     #TODO: Let us accept it in both safety modes but require it only in "safe mode".
-                    typeHint2 = QueryType.DELETE
-                elif re.fullmatch(r'[:+\-*/%]=', o._operator):
-                    typeHint2 = QueryType.UPDATE
+                    indicator2, typeHint2 = op, QueryType.DELETE
+                elif re.fullmatch(r'[:+\-*/%]=', op):
+                    indicator2, typeHint2 = op, QueryType.UPDATE
             else:
                 # Operator length > 2. This means it's a DDL command or it's
                 # one of the obscure arithmetic update operators <<= or >>=.
@@ -105,8 +104,8 @@ class QueryProcessor:
                 pass
 
             # If some operators indicate different query types, it's an error
-            if previousHint2 != typeHint2 and previousHint2 != QueryType.OTHER:
-                return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, previousOp, op)
+            if typeHint2 != previousHint2 and previousHint2 != QueryType.OTHER:
+                return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, previousIndicator2, op)
 
         # Once all the operators have been examined, if the type is still marked
         # OTHER then there there were NO operators. SELECTs, and only SELECTs,
@@ -114,9 +113,9 @@ class QueryProcessor:
         if typeHint1 == QueryType.OTHER and typeHint2 == QueryType.OTHER:
             queryType = QueryType.SELECT
         elif typeHint1 == typeHint2:
-            queryType = typeHint1
+            queryType = typeHint2
         else:
-            return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, msgOverride="Query type is ambiguous, please check operators and flags.")
+            return em.setError(ReturnCode.INCONSISTENT_QUERY_TYPES, indicator1, indicator2)
 
         return queryType
 
