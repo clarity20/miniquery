@@ -10,10 +10,10 @@ sys.path.append(".." + os.sep + "util")
 from miniGlobals import tqlCommands
 
 class ArgumentClassifier:
-    # Sets of legal values for radio-button options
+    # Define the legal values for radio-button options
     RADIOSET_CONJUNCTIONS = {'a', 'o'}    # and/or
     RADIOSET_VALUE_LOGICS = {'2v', '3v'}  # 2- or 3-valued logic
-    RADIOSET_EXECUTION_MODES = {'e', 'i'} # one-and-done or interactive
+    RADIOSET_EXECUTION_MODES = {'e', 'int'} # one-and-done or interactive
     RADIOSET_DISPLAY_MODES = {'tab', 'wrap', 'nowrap', 'vertical'}
     RADIO_OPTIONS_BY_SET = [(setId, opt) for (setId, options) in enumerate([
                                     RADIOSET_CONJUNCTIONS,
@@ -32,16 +32,19 @@ class ArgumentClassifier:
         Initialize an ArgumentClassifier object.
         """
         self.mainTableName = ''
+        self._commandName = ''
         self._argumentTree = {}
         self._operators = []
         self._literalSql = None    # Used in the special case of \sq commands
+        self._isQueryCommand = None
+        self._isExplicitCommand = None
 
         # The options in effect for the current command, defined as the persistent options
         # adjusted by any transient overrides specified by option flags in the command.
         self._options = {}
 
         # Caller can force a given option list upon a command, overriding the persistent/transient
-        # distinction, by specifying an optionList
+        # distinction, by specifying the optionList
         if optionList:
             for opt in optionList:
                 op, eq, vl = opt.partition('=')
@@ -117,7 +120,7 @@ class ArgumentClassifier:
         radioGroup = {x for x in self.RADIO_OPTIONS_BY_SET if x[0] == groupId}
         # Enforce radio behavior: Turn on the selected option and turn off its companions
         optionList[option] = True       # In radio groups the value should always be True
-        for opt in radioGroup - {groupIdOptionPair}:
+        for (groupId, opt) in radioGroup - {groupIdOptionPair}:
             optionList.pop(opt, None)
 
         return self
@@ -135,8 +138,8 @@ class ArgumentClassifier:
         If there is a table-name argument, identify it.
         Sort the other arguments into sublists according to their prefixes.
 
-        Option-type arguments are flagged by the "-" prefix for both System and
-        Query commands. Here we construct a command's full option list by appending the
+        Option-type arguments are flagged by the "-" prefix.
+        Here we construct a command's full option list by appending the
         explicitly-provided options to the options implied by the program settings.
         We also enforce some mutual exclusivity restrictions that apply to certain
         families of options.
@@ -150,8 +153,7 @@ class ArgumentClassifier:
         the arguments' meanings here.
 
         Before calling this function, unravel all aliases and variables,
-        leaving a "flat" command, then
-        shlex.split() it to convert to a list of words if not a list already.
+        leaving a "flat" command, then split it into a list of words.
         '''
 
         if not argList:
@@ -189,7 +191,7 @@ class ArgumentClassifier:
 
         # Other System commands that don't follow the arg-classifier paradigm
         # require no further preprocessing
-        elif not self._isQueryCommand and self._commandName != 'help':
+        elif not self._isQueryCommand:
             return self
 
         # For TQL query commands we apply the main classifier logic
