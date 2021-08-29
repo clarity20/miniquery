@@ -32,7 +32,6 @@ settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
 programSettingsFile = ''
 args = ArgumentClassifier()
-
 historyObject = None
 
 class MiniFileHistory(FileHistory):
@@ -80,6 +79,10 @@ def main():
     else:
         em.doExit()
 
+    # Load the initial db config and schema
+    if dataConfig.setup() != ReturnCode.SUCCESS:
+        em.doExit()
+
     # If the standard input has been redirected, execute its commands
     # and quickly exit, as in mysql
     if not ms.isInputTty:
@@ -97,12 +100,6 @@ def main():
         em.doExit()
 
     args = args.classify(argv)
-    
-    # The configs and the cache must be loaded before any commands are
-    # processed. This is because the first cmd can be a sys cmd that needs
-    # a list of tab-completion candidates that comes from the db schema.
-    if dataConfig.setup() != ReturnCode.SUCCESS:
-        em.doExit()
 
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = '-e' in argv
@@ -505,12 +502,15 @@ def doHistory(argv):
     return ReturnCode.SUCCESS
 
 def doFormat(argv):
+    global args
     argc = len(argv)
 
     optionsTuple = settingOptionsMap['format']
-    _chooseValueFromList(optionsTuple[0], 'Settings', 'format',
+    choice = _chooseValueFromList(optionsTuple[0], 'Settings', 'format',
                 optionsTuple[1], optionsTuple[2],
                 userEntry=argv[0] if argc >= 1 else None)
+    if choice:
+        args._addOption(optionsTuple[0][choice], isPersistent=True)
     return ReturnCode.SUCCESS
 
 def doSetDatabase(argv):
@@ -845,7 +845,7 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                     endlineProtocol = buttonList[choice][0]
             settingsChanged = True
 
-    return ReturnCode.SUCCESS
+    return choice
 
 
 # Function to set or query a MINIQUERY system setting when an "infinitude"
