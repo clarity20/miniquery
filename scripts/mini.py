@@ -15,7 +15,7 @@ import miniEnv as env
 from miniHelp import giveMiniHelp
 from appSettings import miniSettings as ms
 from errorManager import miniErrorManager as em, ReturnCode
-from configManager import masterDataConfig as cfg
+from configManager import masterDataConfig as dataConfig
 from argumentClassifier import ArgumentClassifier
 from queryProcessor import QueryProcessor, HiddenQueryProcessor
 from databaseConnection import miniDbConnection as dbConn
@@ -30,7 +30,7 @@ from miniDialogs import yes_no_dialog, button_dialog, input_dialog, MiniListBoxD
 setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
-userConfigFile = ''
+programSettingsFile = ''
 args = ArgumentClassifier()
 
 historyObject = None
@@ -53,7 +53,7 @@ class MiniFileHistory(FileHistory):
 
 def main():
     global args, setupPrompt
-    global historyObject, userConfigFile
+    global historyObject, programSettingsFile
     global continuer, delimiter, endlineProtocol
     if '-h' in sys.argv or '--help' in sys.argv:
         giveMiniHelp()
@@ -62,13 +62,13 @@ def main():
     if env.setEnv() != ReturnCode.SUCCESS:
         em.doExit('Environment settings incomplete or incorrect.')
 
-    # Load the user settings from the default file or a custom file
-    userConfigFile = os.path.join(env.HOME, '.minirc')
+    # Load the user settings from the default file or a custom-named file
+    programSettingsFile = os.path.join(env.HOME, '.minirc')
     for arg in sys.argv:
         if arg.startswith('-') and re.match('[-]+c(fg)?=', arg):
-            userConfigFile = arg.split('=')[1]
+            programSettingsFile = arg.split('=')[1]
             break
-    if ms.loadSettings(userConfigFile) == ReturnCode.SUCCESS:
+    if ms.loadSettings(programSettingsFile) == ReturnCode.SUCCESS:
         env.setDatabaseName(ms.settings['Settings']['database'])
     else:
         em.doExit()
@@ -124,7 +124,6 @@ def main():
     histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = MiniFileHistory(histFileName)
     session = PromptSession(history = historyObject)
-
     cmdBuffer = []
     # Cache a few dictionary lookups which should not change very often:
     continuer = ms.settings['Settings']['continuer']
@@ -351,10 +350,8 @@ def dispatchCommand(cmd):
             return ReturnCode.SUCCESS
         result = callback(argv[1:])
 
-        if result == ReturnCode.SUCCESS:
-            return ReturnCode.SUCCESS
-        elif result == ReturnCode.USER_EXIT:
-            return ReturnCode.USER_EXIT
+        if result in [ReturnCode.SUCCESS, ReturnCode.USER_EXIT]:
+            return result
         elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
             # Allow the user to fix the connection settings and keep going.
             #TODO One situation is a failed cxn due to bad cxn strings.
@@ -402,6 +399,7 @@ def doHelp(argv):
         pass
     return ReturnCode.SUCCESS
 
+
 def doSql(sql):
     global args, setupPrompt
     args._options.clear()
@@ -422,20 +420,20 @@ def doSql(sql):
     return ReturnCode.SUCCESS
 
 def doQuit(argv):
-    global settingsChanged, userConfigFile
+    global settingsChanged, programSettingsFile
 
     if settingsChanged:
         choice = button_dialog(title='Save before quitting?',
                 text='Save changes to your MINIQUERY settings before quitting?',
                 buttons=[('Yes',True), ('No',False), ('Cancel',None)])
         if choice:     # User pressed Yes
-            choice = MiniFileDialog('Save Settings File', userConfigFile,
+            choice = MiniFileDialog('Save Settings File', programSettingsFile,
                     can_create_new=True)
             if not choice:
                 return ReturnCode.SUCCESS
             # Try to write the config file
-            userConfigFile = choice
-            ms.settings.filename = userConfigFile
+            programSettingsFile = choice
+            ms.settings.filename = programSettingsFile
             if ms.settings.write() != ReturnCode.SUCCESS:
                 exc = em.getException()
                 em.doWarn()
@@ -453,22 +451,22 @@ def doQuit(argv):
         return ReturnCode.SUCCESS
 
 def doSave(argv):
-    global settingsChanged, userConfigFile
+    global settingsChanged, programSettingsFile
     argc = len(argv)
 
     if settingsChanged:
         # Save program settings, variables and aliases
         if ms.isOutputTty:
-            choice = MiniFileDialog('Save Settings File', userConfigFile,
+            choice = MiniFileDialog('Save Settings File', programSettingsFile,
                     can_create_new=True) if argc<1 else argv[0]
             if not choice:
                 return ReturnCode.SUCCESS
         else:
-            choice = argv[0] if argc>=1 else userConfigFile
+            choice = argv[0] if argc>=1 else programSettingsFile
 
         if choice:
-            userConfigFile = choice
-            ms.settings.filename = userConfigFile
+            programSettingsFile = choice
+            ms.settings.filename = programSettingsFile
             if ms.settings.write():    # Returns None on success. Do not use RC.SUCCESS here.
                 exc = em.getException()
                 em.doWarn()
@@ -477,7 +475,7 @@ def doSave(argv):
     else:
         em.doWarn(msg='No unsaved changes.')
 
-    dbConfig = cfg.databases[ms.settings['Settings']['database']]
+    dbConfig = dataConfig.databases[ms.settings['Settings']['database']]
     if dbConfig.configChanges:
         # Save DB config and reset configChanges
         if dbConfig.saveConfigChanges() != ReturnCode.SUCCESS:
@@ -515,7 +513,7 @@ def doSetDatabase(argv):
     # offering the option to cancel back to the current name. Since the set
     # of DBs is (only) changeable by CREATE DATABASE, use a list box.
     if len(argv) == 0:
-        dbList = list(iter(cfg.databases))
+        dbList = list(iter(dataConfig.databases))
         dbName = MiniListBoxDialog(title='Select a database', itemList=dbList)
         if not dbName:
             return ReturnCode.SUCCESS
@@ -563,7 +561,7 @@ def doSetDatabase(argv):
             return ReturnCode.SUCCESS
 
     # Complete the transition to the new / other DB
-    activeDb = cfg.setActiveDatabase(dbName)
+    activeDb = dataConfig.setActiveDatabase(dbName)
     ms.settings['Settings']['database'] = activeDb.dbName
     ms.settings['Settings']['table'] = activeDb.config.get('anchorTable', '')
     args.mainTableName = activeDb.config.get('anchorTable', '')
@@ -576,7 +574,7 @@ def doSetTable(argv):
     global args, setupPrompt, settingsChanged
 
     currDbName = ms.settings['Settings']['database']
-    tableList = cfg.databases[currDbName].tableNames
+    tableList = dataConfig.databases[currDbName].tableNames
     if not tableList:
         em.setError(ReturnCode.Clarification)
         em.doWarn("No tables for DB %s." % currDbName)
@@ -599,7 +597,7 @@ def doSetTable(argv):
         em.doWarn("Anchor table is already " + currAnchorTable + ".")
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
-    cfg.databases[currDbName].changeAnchorTable(tableName)
+    dataConfig.databases[currDbName].changeAnchorTable(tableName)
     args.mainTableName = tableName
     setupPrompt = True
     settingsChanged = True
@@ -610,7 +608,7 @@ def doClearTable(argv):
 
     ms.settings['Settings']['table']=''
     currDbName = ms.settings['Settings']['database']
-    cfg.databases[currDbName].changeAnchorTable('')
+    dataConfig.databases[currDbName].changeAnchorTable('')
     args.mainTableName = ''
     setupPrompt = True
     settingsChanged = True
