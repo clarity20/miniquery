@@ -51,11 +51,17 @@ class MiniFileHistory(FileHistory):
                 self._doStore = False
                 em.setException(ex, "Miniquery command history file", "Commands will not be saved.")
 
+
 def main():
     global args, setupPrompt
     global historyObject, programSettingsFile
     global continuer, delimiter, endlineProtocol
-    if '-h' in sys.argv or '--help' in sys.argv:
+
+    # Make a copy of sys.argv that we can edit. Pop off the program name in cell 0.
+    argv = sys.argv.copy()
+    programName = argv.pop(0)
+
+    if '-h' in argv or '--help' in argv:
         giveMiniHelp()
         em.doExit()
 
@@ -64,9 +70,10 @@ def main():
 
     # Load the user settings from the default file or a custom-named file
     programSettingsFile = os.path.join(env.HOME, '.minirc')
-    for arg in sys.argv:
-        if arg.startswith('-') and re.match('[-]+c(fg)?=', arg):
+    for arg in argv:
+        if re.match('[-]+c(fg)?=', arg):
             programSettingsFile = arg.split('=')[1]
+            argv.remove(arg)
             break
     if ms.loadSettings(programSettingsFile) == ReturnCode.SUCCESS:
         env.setDatabaseName(ms.settings['Settings']['database'])
@@ -89,22 +96,20 @@ def main():
         # Exit at EOF
         em.doExit()
 
-    args = args.classify(sys.argv[1:])   # skip the program name
+    args = args.classify(argv)
     
     # The configs and the cache must be loaded before any commands are
     # processed. This is because the first cmd can be a sys cmd that needs
     # a list of tab-completion candidates that comes from the db schema.
-    if cfg.setup() != ReturnCode.SUCCESS:
+    if dataConfig.setup() != ReturnCode.SUCCESS:
         em.doExit()
 
     # In one-and-done mode, execute the cmd and exit
-    oneAndDoneMode = 'e' in args._options
+    oneAndDoneMode = '-e' in argv
     if oneAndDoneMode:
-        # Take everything after '-e' to be the command;
-        # all option flags need to come *before* it
-        which = sys.argv.index('-e') + 1
-        cmd = _regularizeCommandLine(sys.argv[which:])
-        dispatchCommand(cmd, '')
+        argv.remove('-e')
+        cmd = _regularizeCommandLine(argv)
+        dispatchCommand(cmd)
         em.doExit()
 
     # Prelude to the main event loop
@@ -114,12 +119,12 @@ def main():
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
     # If there is a command or a query on the command line, accept it before starting the main loop
-    cmd = " ".join(sys.argv[1:])    # skip "mini"
+    cmd = _regularizeCommandLine(argv)
     if cmd.startswith(ms.settings['Settings']['leader']):
-        dispatchCommand(cmd, '')
+        dispatchCommand(cmd)
     elif cmd:
         if args.mainTableName and args._argumentTree:     # args.wheres or args.updates or args.postSelects:
-            dispatchCommand(cmd, '')
+            dispatchCommand(cmd)
 
     histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = MiniFileHistory(histFileName)
@@ -269,14 +274,15 @@ def _commandToWordList(cmd):
     return words
 
 
-def _unravelAliases(cmd):
+def _unravelAliases(cmd, leader):
+    strippedCmd = cmd.lstrip(leader)
     for a in ms.settings['Aliases']:
         # We have an alias when the cmd "starts with" an alias.
         # We have to recognize false "aliases" that are
         # simply proper substrings of a longer command name
-        if cmd.startswith(a):
+        if strippedCmd.startswith(a):
             try:
-                isAlias = not cmd[len(a)].isalnum()
+                isAlias = not strippedCmd[len(a)].isidentifier()
             except IndexError:
                 isAlias = True
             if isAlias:
@@ -317,13 +323,11 @@ def _unravelVariables(cmd):
 def dispatchCommand(cmd):
     global args
 
-    # Flatten aliases and variables
-    if cmd.startswith(ms.settings['Settings']['leader']):
-        cmd = cmd.lstrip(ms.settings['Settings']['leader'])
-        isExplicitCommand = True
-        cmd = _unravelVariables(_unravelAliases(cmd))
+    # Unravel aliases and variables
+    leader = ms.settings['Settings']['leader']
+    if cmd.startswith(leader):
+        cmd = _unravelVariables(_unravelAliases(cmd, leader))
     else:
-        isExplicitCommand = False
         cmd = _unravelVariables(cmd)
 
     # Preprocess the command and distinguish system commands from queries
@@ -331,7 +335,7 @@ def dispatchCommand(cmd):
     if em.getError() != ReturnCode.SUCCESS:
         em.doWarn()
         return em.getError()
-    args = args.classify(argv, isExplicitCommand)
+    args = args.classify(argv, leader)
 
     # Process the command as a query or as a system command
     if args._isQueryCommand:
@@ -342,13 +346,16 @@ def dispatchCommand(cmd):
             em.doWarn()
             return retValue
     else:
-        # Call the function indicated by the first word
-        try:
-            callback = callbackMap[args._commandName]
-        except KeyError:
-            print('Unknown command "'+ args._commandName + '"')
+        # Invoke the callback for the command
+        if args._commandName:
+            try:
+                callback = callbackMap[args._commandName]
+                result = callback(argv[1:])
+            except KeyError:
+                print('Unknown command "'+ args._commandName + '"')
+                return ReturnCode.SUCCESS
+        else:
             return ReturnCode.SUCCESS
-        result = callback(argv[1:])
 
         if result in [ReturnCode.SUCCESS, ReturnCode.USER_EXIT]:
             return result

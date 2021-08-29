@@ -131,7 +131,7 @@ class ArgumentClassifier:
             self._operator = operator
             self._position = position
 
-    def classify(self, argList, isExplicitCommand=None):     #TODO: Would *argList be better?
+    def classify(self, argList, leader):     #TODO: Would *argList be better?
         '''
         Determine whether the arguments denote a System Command or a Query Command,
         and whether the command is implicit or explicit.
@@ -159,14 +159,10 @@ class ArgumentClassifier:
         if not argList:
             return self
 
-        if isExplicitCommand is None:
-            leader = ms.settings['Settings']['leader']
-            isExplicitCommand = argList[0].startswith(leader)
-            argList[0] = argList[0].lstrip(leader)
-
-        self._commandName = argList[0].lower() if isExplicitCommand else None
-        argIndex = 1 if isExplicitCommand else 0
-        self._isQueryCommand = self._commandName in tqlCommands or not isExplicitCommand
+        if argList[0].startswith(leader):
+            self._isExplicitCommand = True
+            self._commandName = argList.pop(0).lstrip(leader).lower()
+        self._isQueryCommand = self._commandName in tqlCommands or not self._isExplicitCommand
 
         # Initialize the table name now if it's been set
         self.mainTableName = ms.settings['Settings']['table']
@@ -177,17 +173,15 @@ class ArgumentClassifier:
         # The 'sq' command has a special syntax: options followed by literal
         # SQL in that order with nothing else allowed.
         if self._commandName == 'sq':
-            inOptions = True   # Accept options at the beginning and only there
-            for arg in argList[argIndex:]:
-                if inOptions and re.match('-+\w', arg):
+            for idx, arg in enumerate(argList):
+                if re.match('-+\w', arg):
                     op, eq, vl = arg.lstrip('-').partition('=')
                     self._addOption(op, vl)
-                    argIndex += 1
                 else:
-                    inOptions = False
                     # Beyond the last option, every argument is to be treated
                     # as literal sql.
-                    self._literalSql = " ".join(argList[argIndex:])
+                    self._literalSql = " ".join(argList[idx:])
+                    break
 
         # Other System commands that don't follow the arg-classifier paradigm
         # require no further preprocessing
@@ -199,7 +193,7 @@ class ArgumentClassifier:
             # Walk the argument list, accumulating arguments into lists
             # by their prefix (including options, whose
             # prefix is '-') and take note of operators (+= := etc.)
-            for arg in argList[argIndex:]:
+            for arg in argList:
 
                 # Separate prefix and word
                 m = re.fullmatch(r'(\W*)(\w.*)', arg)
