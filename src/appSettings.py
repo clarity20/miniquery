@@ -10,7 +10,7 @@ from validate import Validator, VdtValueError, VdtTypeError, VdtValueTooLongErro
 
 fakePass = '-1.a###0q'
 
-class MiniConfigObj(ConfigObj):
+class MiniSettings(ConfigObj):
     # Init the superclass
     def __init__(self, *args, **kwargs):
         ConfigObj.__init__(self, *args, **kwargs)
@@ -46,7 +46,7 @@ class appSettings():
         # Load the settings from the user-specific file if it is available.
         if os.path.isfile(userSettingsFile):
             try:
-                self.settings = MiniConfigObj(userSettingsFile, configspec=cfgSpec,
+                self.settings = MiniSettings(userSettingsFile, configspec=cfgSpec,
                         # file_error catches nonexistence of file
                         file_error=True)
                 
@@ -113,7 +113,7 @@ class appSettings():
         globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
         if os.path.isfile(globalSettingsFile):
             try:
-                self.settings = MiniConfigObj(globalSettingsFile, configspec=cfgSpec,
+                self.settings = MiniSettings(globalSettingsFile, configspec=cfgSpec,
                         file_error=True)
             except (ConfigObjError, IOError) as e:
                 return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, cfgSpec)
