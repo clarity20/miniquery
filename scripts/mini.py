@@ -31,7 +31,7 @@ setupPrompt = True
 settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
 programSettingsFile = ''
-args = ArgumentClassifier()
+args = None
 historyObject = None
 
 class MiniFileHistory(FileHistory):
@@ -52,7 +52,7 @@ class MiniFileHistory(FileHistory):
 
 
 def main():
-    global args, setupPrompt
+    global setupPrompt
     global historyObject, programSettingsFile
     global continuer, delimiter, endlineProtocol
 
@@ -99,8 +99,6 @@ def main():
         # Exit at EOF
         em.doExit()
 
-    args = args.classify(argv)
-
     # In one-and-done mode, execute the cmd and exit
     oneAndDoneMode = '-e' in argv
     if oneAndDoneMode:
@@ -115,14 +113,6 @@ def main():
     print('Copyright (c) 2019-2021 Miniquery AMDG, LLC')
     print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
 
-    # If there is a command or a query on the command line, accept it before starting the main loop
-    cmd = _regularizeCommandLine(argv)
-    if cmd.startswith(ms.settings['Settings']['leader']):
-        dispatchCommand(cmd)
-    elif cmd:
-        if args.mainTableName and args._argumentTree:     # args.wheres or args.updates or args.postSelects:
-            dispatchCommand(cmd)
-
     histFileName = os.path.join(env.HOME, '.mini_history')
     historyObject = MiniFileHistory(histFileName)
     session = PromptSession(history = historyObject)
@@ -131,6 +121,10 @@ def main():
     continuer = ms.settings['Settings']['continuer']
     delimiter = ms.settings['Settings']['delimiter']
     endlineProtocol = ms.settings['Settings']['endlineProtocol']
+
+    # If a system command or a query was given on the command line, process it before starting the main loop
+    cmd = _regularizeCommandLine(argv)
+    dispatchCommand(cmd)
 
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while True:
@@ -332,7 +326,8 @@ def dispatchCommand(cmd):
     if em.getError() != ReturnCode.SUCCESS:
         em.doWarn()
         return em.getError()
-    args = args.classify(argv, leader)
+#TODO: Make args local-scope so it will automatically be reset, with no need to re-construct here.
+    args = ArgumentClassifier().classify(argv, leader)
 
     # Process the command as a query or as a system command
     if args._isQueryCommand:
@@ -386,18 +381,6 @@ def doHelp(argv):
         ldr = ms.settings['Settings']['leader']
         leftSide = ['{} {}'.format(c[0], c[1]) for c in commandList]
         print('\n'.join(['  {}{:<20}: {}'.format(ldr,l,c[2]) for l,c in zip(leftSide,commandList)]))
-
-#TODO: Add these
-#*m{ode}             : Select a SQL subfamily mode\n\
-#*ab{brev}           : Define an object-name abbreviation\n\
-#TODO: Add a list of TOPICS such as the prompt and how to write MINI-queries
-#TODO: Add a list of cmdline opts/flags with a few general instructions as follows:
-#TODO:   Flags with values must be written -x=1234, i.e. equal sign with no spaces.
-#TODO:     e: one-and-done, followed ONLY by the command. Any other option flags must precede the -e.
-#TODO:     p: password (Useful when stdout is redirected; then, without a PW the program errors-out)
-#TODO:     2v/3v: logic       a,o: conjunction
-#TODO: Finally, point the user to a tutorial.
-
     else:
         #TODO print('FUTURE: command-specific help')
         pass
@@ -406,6 +389,7 @@ def doHelp(argv):
 
 def doSql(sql):
     global args, setupPrompt
+#TODO: Instead of clear(), we should use the args() created in dispatch() since it has the correct option set.
     args._options.clear()
     fullSql = " ".join(sql)
     retValue = QueryProcessor(args).process(fullSql)

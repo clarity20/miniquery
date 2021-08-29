@@ -49,8 +49,12 @@ class ArgumentClassifier:
             for opt in optionList:
                 op, eq, vl = opt.partition('=')
                 self._addOption(op, vl)
+        # For the default invocation (i.e. no optionList), make sure the class-level data is set
+        elif not ArgumentClassifier._persistentOptions:
+            ArgumentClassifier.initPersistentOptions()
 
-    def initPersistentOptions(self):
+    @classmethod
+    def initPersistentOptions(cls):
         '''
         We do not expect the persistent options to change often. This method
         is a slight optimization for when they all need to be set at program
@@ -58,8 +62,8 @@ class ArgumentClassifier:
         '''
 
         # If the persistent options have already been initialized, do nothing
-        if ArgumentClassifier._persistentOptions:
-            return ArgumentClassifier._persistentOptions
+        if cls._persistentOptions:
+            return cls._persistentOptions
 
         # Translate the config settings to options (at least those which
         # can be so translated), since these are the ultimate fallbacks which
@@ -68,24 +72,25 @@ class ArgumentClassifier:
         # 1. runMode
         settings = ms.settings['Settings']
         if settings['runMode'] == 'both':
-            ArgumentClassifier._persistentOptions['r'] = True
-            ArgumentClassifier._persistentOptions['q'] = True
+            cls._persistentOptions['r'] = True
+            cls._persistentOptions['q'] = True
         elif settings['runMode'] == 'query':
-            ArgumentClassifier._persistentOptions['q'] = True
+            cls._persistentOptions['q'] = True
         else:
-            ArgumentClassifier._persistentOptions['r'] = True
+            cls._persistentOptions['r'] = True
         # 2. display format
         mode = settings['format']
-        ArgumentClassifier._persistentOptions[mode] = True
+        cls._persistentOptions[mode] = True
 #TODO: 3. Anything else ??? continuer/delimiter?
 
         # Secondly, append the hidden (env) options. They have precedence over the above.
         for arg in split(env.MINI_OPTIONS):
             option, eq, value = arg.lstrip('-').partition('=')
-            self._addOption(option, value, True)   # Do we need "value or True" instead?
+            # _addOption is an instance method. Invoke it through a temp object.
+            ArgumentClassifier(optionList=['dummy'])._addOption(option, value, True)
 
         # We skip any options set on the command line because they are transient.
-        return ArgumentClassifier._persistentOptions
+        return cls._persistentOptions
 
 
     def addOption(self, option, value=None, isPersistent=False):
@@ -108,7 +113,7 @@ class ArgumentClassifier:
 
         # Find the radio group containing this option, if any
         try:
-            groupIdOptionPair = [x for x in self.RADIO_OPTIONS_BY_SET if x[1] == option][0]
+            groupIdOptionPair = [x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[1] == option][0]
             groupId = groupIdOptionPair[0]
 
         # For non-radio-type options, do a quick set-and-return
@@ -117,7 +122,7 @@ class ArgumentClassifier:
             return self
 
         # Get the whole radio group
-        radioGroup = {x for x in self.RADIO_OPTIONS_BY_SET if x[0] == groupId}
+        radioGroup = {x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[0] == groupId}
         # Enforce radio behavior: Turn on the selected option and turn off its companions
         optionList[option] = True       # In radio groups the value should always be True
         for (groupId, opt) in radioGroup - {groupIdOptionPair}:
@@ -168,7 +173,7 @@ class ArgumentClassifier:
         self.mainTableName = ms.settings['Settings']['table']
 
         # Begin the options vector with the fallback options
-        self._options = self.initPersistentOptions()
+        self._options = ArgumentClassifier._persistentOptions.copy()
 
         # The 'sq' command has a special syntax: options followed by literal
         # SQL in that order with nothing else allowed.
