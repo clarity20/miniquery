@@ -299,6 +299,7 @@ class HiddenQueryProcessor(QueryProcessor):
     '''
 
     def __init__(self):
-        arguments = ArgumentClassifier().addOption('r')
+        arguments = ArgumentClassifier()
+        arguments._persistentOptions['r'] = True
         super().__init__(arguments)
 

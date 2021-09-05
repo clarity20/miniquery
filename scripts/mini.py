@@ -341,7 +341,7 @@ def dispatchCommand(cmd):
         if args._commandName:
             try:
                 callback = callbackMap[args._commandName]
-                result = callback(argv[1:])
+                result = callback(argv)
             except KeyError:
                 print('Unknown command "'+ args._commandName + '"')
                 return ReturnCode.SUCCESS
@@ -389,8 +389,6 @@ def doHelp(argv):
 
 def doSql(sql):
     global args, setupPrompt
-#TODO: Instead of clear(), we should use the args() created in dispatch() since it has the correct option set.
-    args._options.clear()
     fullSql = " ".join(sql)
     retValue = QueryProcessor(args).process(fullSql)
     if retValue != ReturnCode.SUCCESS:
@@ -493,8 +491,8 @@ def doFormat(argv):
     choice = _chooseValueFromList(optionsTuple[0], 'Settings', 'format',
                 optionsTuple[1], optionsTuple[2],
                 userEntry=argv[0] if argc >= 1 else None)
-    if choice:
-        args._addOption(optionsTuple[0][choice], isPersistent=True)
+    if choice >= 0:
+        args._persistentOptions[optionsTuple[0][choice]] = True
     return ReturnCode.SUCCESS
 
 def doSetDatabase(argv):
@@ -808,6 +806,7 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
 
     if userEntry:
         if userEntry in lst:
+            choice = lst.index(userEntry)
             if subcategory:
                 ms.settings[category][subcategory][setting] = userEntry
             else:
@@ -824,6 +823,7 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                         if length >= 3 else ' or '.join(lst)
             print('Illegal option "{}". Please choose one of {}'. format(
                 userEntry, csv))
+            choice = -1
     else:
         #TODO: In LOUD mode, offer a dialog. In SOFT mode, offer autocompletion
         # Button list must be a list of pair-tuples: (name, return value)

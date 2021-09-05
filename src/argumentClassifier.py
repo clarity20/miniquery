@@ -23,9 +23,37 @@ class ArgumentClassifier:
                                     ])
                                 for opt in options]
 
+    class MiniOptions(dict):
+        def __setitem__(self, option, value=None):
+            '''
+            Set/change an option while enforcing "radio button" exclusivity
+            '''
+
+            # Find the radio group containing this option, if there is one
+            try:
+                groupIdOptionPair = [x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[1] == option][0]
+                groupId = groupIdOptionPair[0]
+
+            # For non-radio-type options, do a quick set-and-return
+            except IndexError:
+                dict.__setitem__(self, option, value)
+                return
+
+            # Get the whole radio button group
+            radioGroup = {x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[0] == groupId}
+            # Enforce radio behavior: Turn on the selected option and turn off its companions
+            for (groupId, opt) in radioGroup - {groupIdOptionPair}:
+                self.pop(opt, None)
+            dict.__setitem__(self, option, True)
+
+            return
+
+        def copy(self):
+            return ArgumentClassifier.MiniOptions(self)
+
     # Use class-level storage for the option flags that need to be in effect
     # across commands until changed
-    _persistentOptions = {}
+    _persistentOptions = MiniOptions()
 
     def __init__(self, optionList=[]):
         """
@@ -41,14 +69,14 @@ class ArgumentClassifier:
 
         # The options in effect for the current command, defined as the persistent options
         # adjusted by any transient overrides specified by option flags in the command.
-        self._options = {}
+        self._options = ArgumentClassifier.MiniOptions()
 
         # Caller can force a given option list upon a command, overriding the persistent/transient
         # distinction, by specifying the optionList
         if optionList:
             for opt in optionList:
                 op, eq, vl = opt.partition('=')
-                self._addOption(op, vl)
+                self._options[op] = vl
         # For the default invocation (i.e. no optionList), make sure the class-level data is set
         elif not ArgumentClassifier._persistentOptions:
             ArgumentClassifier.initPersistentOptions()
@@ -58,7 +86,7 @@ class ArgumentClassifier:
         '''
         We do not expect the persistent options to change often. This method
         is a slight optimization for when they all need to be set at program
-        startup. Subsequent changes to these options should be handled by addOption().
+        startup. Subsequent changes to these options should be through direct assignment.
         '''
 
         # If the persistent options have already been initialized, do nothing
@@ -86,49 +114,10 @@ class ArgumentClassifier:
         # Secondly, append the hidden (env) options. They have precedence over the above.
         for arg in split(env.MINI_OPTIONS):
             option, eq, value = arg.lstrip('-').partition('=')
-            # _addOption is an instance method. Invoke it through a temp object.
-            ArgumentClassifier(optionList=['dummy'])._addOption(option, value, True)
+            cls._persistentOptions[option] = value
 
         # We skip any options set on the command line because they are transient.
         return cls._persistentOptions
-
-
-    def addOption(self, option, value=None, isPersistent=False):
-        '''
-        Exposes the option settings for write access, either transiently
-        or persistently. In particular, whenever an option is changed through
-        a System Command, call this to ensure the change is propagated to
-        the (internal) persistent options, not just the program settings.
-        '''
-        return self._addOption(option, value, isPersistent)
-
-
-    def _addOption(self, option, value=None, isPersistent=False):
-        '''
-        Add an option to the options (or the persistent options) or change the value
-        of an existing option while enforcing exclusivity of the "radio button" ones
-        '''
-
-        optionList = ArgumentClassifier._persistentOptions if isPersistent else self._options
-
-        # Find the radio group containing this option, if any
-        try:
-            groupIdOptionPair = [x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[1] == option][0]
-            groupId = groupIdOptionPair[0]
-
-        # For non-radio-type options, do a quick set-and-return
-        except IndexError:
-            optionList[option] = value
-            return self
-
-        # Get the whole radio group
-        radioGroup = {x for x in ArgumentClassifier.RADIO_OPTIONS_BY_SET if x[0] == groupId}
-        # Enforce radio behavior: Turn on the selected option and turn off its companions
-        optionList[option] = True       # In radio groups the value should always be True
-        for (groupId, opt) in radioGroup - {groupIdOptionPair}:
-            optionList.pop(opt, None)
-
-        return self
 
 
     class Operator():
@@ -136,7 +125,7 @@ class ArgumentClassifier:
             self._operator = operator
             self._position = position
 
-    def classify(self, argList, leader):     #TODO: Would *argList be better?
+    def classify(self, argList, leader):
         '''
         Determine whether the arguments denote a System Command or a Query Command,
         and whether the command is implicit or explicit.
@@ -181,7 +170,7 @@ class ArgumentClassifier:
             for idx, arg in enumerate(argList):
                 if re.match('-+\w', arg):
                     op, eq, vl = arg.lstrip('-').partition('=')
-                    self._addOption(op, vl)
+                    self._options[op] = vl
                 else:
                     # Beyond the last option, every argument is to be treated
                     # as literal sql.
@@ -207,7 +196,7 @@ class ArgumentClassifier:
                 # If an option, process and continue
                 if re.fullmatch(r'-+', prefix):
                     op, eq, vl = word.partition('=')
-                    self._addOption(op, vl)
+                    self._options[op] = vl
                     continue
 
                 # Make note of any modification operators inside the arguments.
