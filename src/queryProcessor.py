@@ -210,6 +210,7 @@ class QueryProcessor:
             elif 'wrap' in self._arguments._options:
                 # Choose a helper column to make the wrap more readable
                 from appSettings import miniSettings; ms = miniSettings
+                dbCfg = tableCfg = None
                 try:
                     dbCfg = cfg.databases[ms.settings['Settings']['database']]
                     tableCfg = dbCfg.tables[ms.settings['Settings']['table']]
