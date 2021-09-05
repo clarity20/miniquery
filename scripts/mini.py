@@ -422,7 +422,7 @@ def doQuit(argv):
             # Try to write the config file
             programSettingsFile = choice
             ms.settings.filename = programSettingsFile
-            if ms.settings.write() != ReturnCode.SUCCESS:
+            if ms.settings.write() == ReturnCode.FILE_NOT_WRITABLE:
                 exc = em.getException()
                 em.doWarn()
                 return ReturnCode.SUCCESS
