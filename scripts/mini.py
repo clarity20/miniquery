@@ -326,7 +326,6 @@ def dispatchCommand(cmd):
     if em.getError() != ReturnCode.SUCCESS:
         em.doWarn()
         return em.getError()
-#TODO: Make args local-scope so it will automatically be reset, with no need to re-construct here.
     args = ArgumentClassifier().classify(argv, leader)
 
     # Process the command as a query or as a system command
@@ -369,6 +368,7 @@ def doHelp(argv):
 #    > Add these:
 #      *ab{brev}           : Define an object-name abbreviation
 #      *tutor              : Detailed MINIQUERY tutorial starting with very simple queries
+#      *cfgtable, *cfgdb   : Configure current table or db (e.g. set the regexes, std. cols, ...)
 #    > Add a list of TOPICS such as the prompt and how to write MINI-queries.
 #    > Add a list of cmdline opts/flags with a few general instructions as follows:
 #      Flags with values must be written -x=1234, i.e. equal sign with no spaces.
@@ -552,10 +552,17 @@ def doSetDatabase(argv):
             return ReturnCode.SUCCESS
 
     # Complete the transition to the new / other DB
+#TODO: Clean up / encapsulate this big time.
     activeDb = dataConfig.setActiveDatabase(dbName)
     ms.settings['Settings']['database'] = activeDb.dbName
+    cxnSettings = ms.settings['ConnectionString']
+    cxnSettings['FullString']['MINI_CONNECTION_STRING'] = \
+        cxnSettings['FullString']['MINI_CONNECTION_STRING'].replace(currDbName, dbName)
+    cxnSettings['FullPath']['MINI_DBPATH'] = \
+        cxnSettings['FullPath']['MINI_DBPATH'].replace(currDbName, dbName)
     ms.settings['Settings']['table'] = activeDb.config.get('anchorTable', '')
     args.mainTableName = activeDb.config.get('anchorTable', '')
+    dbConn.changeDatabase(activeDb.dbName)
     # Update the prompt
     setupPrompt = True
     settingsChanged = True

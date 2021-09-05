@@ -40,6 +40,15 @@ class databaseConnection():
             return None
         return self._cxn
 
+    def changeDatabase(self, dbName):
+        '''
+        Close the current DB connection and open a new one to the given DB
+        '''
+        if self._cxn:
+            del self._cxn
+            self._cxn = None
+        return self.getConnection()
+
     def getConnection(self):
         if self._cxn:
             return self._cxn
