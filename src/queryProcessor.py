@@ -163,23 +163,21 @@ class QueryProcessor:
                             for i in range(columnCount)]
 
             if 'vertical' in self._arguments._options:
-                nameWidth = max([len(columnHdrs[i]) for i in range(columnCount)])
+                nameWidth = max(map(len,columnHdrs))
                 # Format is "column header : value" repeated over the columns.
                 # In the next line we precompute the format pieces and concat.
                 format = '\n'.join(['{0:>{width}}: %s'.
                             format(h, width=nameWidth) for h in columnHdrs])
-                count = 0
                 while True:
                     rows = resultSet.fetchmany()
                     if not rows:
                         break
-                    for row in rows:
+                    for count,row in enumerate(rows):
                         # The banner: * is fill, ^ is centering, 62 is width,
                         # all to mimic mysql's behavior
                         print('{0:*^62}'.format(' %d. row ' % count))
                         # The data: write the values into the prepared format
                         print(format % tuple(v or 'NULL' for v in row.values()))
-                        count += 1
 
                 return ReturnCode.SUCCESS
 
@@ -190,7 +188,8 @@ class QueryProcessor:
             # If necessary, widen columns to accommodate NULLs
             for col in range(columnCount):
                 if columnWidths[col] < 4:
-                    columnHasNull = True in [not row[col] for row in rows]  #TODO "not..." is suspicious!
+#                    columnHasNull = True in [not row[col] for row in rows]
+                    columnHasNull = any([row[col] is None for row in rows])
                     if columnHasNull:
                         columnWidths[col] = 4
 
@@ -205,7 +204,7 @@ class QueryProcessor:
                 result = [format % tuple(columnHdrs)]
                 result.append('')
                 for row in rows:
-                    result.append(format % tuple([v or 'NULL' for v in row.values()])) #TODO "NULL" is suspicious!
+                    result.append(format % tuple(map(lambda v:'NULL' if v is None else v, row.values())))
                 print("\n".join(result))
                 return ReturnCode.SUCCESS
             elif 'wrap' in self._arguments._options:
