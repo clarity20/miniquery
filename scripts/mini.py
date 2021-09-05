@@ -698,9 +698,13 @@ def doGet(argv):
             print(settingName + ': ' + str(ms.settings['Settings'][settingName]))
         else:
             found = False
-            for s in ms.settings['ConnectionString']:
-                if isinstance(s, dict) and settingName in s:
-                    print(settingName + ': ' + str(ms.settings['ConnectionString'][s][settingName]))
+            for s in ms.settings['ConnectionString'].items():
+                if isinstance(s[1], dict) and settingName in s[1]:
+                    print(settingName + ': ' + str(ms.settings['ConnectionString'][s[0]][settingName]))
+                    found = True
+                    break
+                elif settingName == s[0]:
+                    print(settingName + ': ' + str(ms.settings['ConnectionString'][settingName]))
                     found = True
                     break
             if not found:
