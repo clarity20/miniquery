@@ -155,7 +155,7 @@ class QueryProcessor:
                 if not rows:
                     break
                 for row in rows:
-                    print(format % tuple(v or 'NULL' for v in row.values()))
+                    print(format % tuple(map(lambda v: 'NULL' if v is None else v, row.values())))
             return ReturnCode.SUCCESS
         else:
             types = resultSet._cursor_description()
@@ -177,7 +177,7 @@ class QueryProcessor:
                         # all to mimic mysql's behavior
                         print('{0:*^62}'.format(' %d. row ' % count))
                         # The data: write the values into the prepared format
-                        print(format % tuple(v or 'NULL' for v in row.values()))
+                        print(format % tuple(map(lambda v: 'NULL' if v is None else v, row.values())))
 
                 return ReturnCode.SUCCESS
 
@@ -188,7 +188,6 @@ class QueryProcessor:
             # If necessary, widen columns to accommodate NULLs
             for col in range(columnCount):
                 if columnWidths[col] < 4:
-#                    columnHasNull = True in [not row[col] for row in rows]
                     columnHasNull = any([row[col] is None for row in rows])
                     if columnHasNull:
                         columnWidths[col] = 4
