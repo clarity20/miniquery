@@ -3,24 +3,39 @@ import sys
 import platform
 import miniEnv as env
 from errorManager import miniErrorManager, ReturnCode; em = miniErrorManager
-from configobj import ConfigObj, ConfigObjError, flatten_errors
 from validate import Validator, VdtValueError, VdtTypeError, VdtValueTooLongError, \
         VdtValueTooShortError, VdtValueTooBigError, VdtValueTooSmallError
 
+sys.path.append(".." + os.sep + "util")
+from miniConfigObj import MiniConfigObj, ConfigObjError, flatten_errors
 
 fakePass = '-1.a###0q'
 
-class MiniSettings(ConfigObj):
-    # Init the superclass
-    def __init__(self, *args, **kwargs):
-        ConfigObj.__init__(self, *args, **kwargs)
+class MiniSettings(MiniConfigObj):
 
-    # Override write() to protect config file writes against exceptions
+    def __init__(self, *args, **kwargs):
+        MiniConfigObj.__init__(self, *args, **kwargs)
+        self._promptChanged = True
+        self._changed = False
+
     def write(self, outfile=None, section=None):
+        '''
+        An override of ConfigObj.write() to protect writes against exceptions.
+        Since the original write() is recursive, this implementation is very sensitive.
+        In particular, do not change the try block below!
+        '''
         try:
-            return ConfigObj.write(self, outfile, section)
+            return MiniConfigObj.write(self, outfile, section)
         except PermissionError as ex:
             return em.setException(ex, "Unable to write: ")
+
+    def save(self):
+        '''
+        Wraps the above write() method to hide the recursion
+        so we can add code that will not work there
+        '''
+        self.write()
+        self._promptChanged = self._changed = False
 
 
 # The appSettings class manages the Miniquery program "settings" (not to be confused
@@ -49,7 +64,7 @@ class appSettings():
                 self.settings = MiniSettings(userSettingsFile, configspec=cfgSpec,
                         # file_error catches nonexistence of file
                         file_error=True)
-                
+
                 # Verify the connection string is provided in a section named
                 # by the "definition type" attribute. If that section is missing
                 # from the config, this check will raise a KeyError. We will

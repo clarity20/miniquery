@@ -27,8 +27,6 @@ from commandCompleter import CommandCompleter
 from miniGlobals import settingOptionsMap
 from miniDialogs import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog, MiniFileDialog
 
-setupPrompt = True
-settingsChanged = False
 continuer = ''; delimiter = ''; endlineProtocol = None
 programSettingsFile = ''
 args = None
@@ -52,7 +50,6 @@ class MiniFileHistory(FileHistory):
 
 
 def main():
-    global setupPrompt
     global historyObject, programSettingsFile
     global continuer, delimiter, endlineProtocol
 
@@ -129,11 +126,12 @@ def main():
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while True:
 
-        if setupPrompt:    # Initialize or update the prompt
+        if ms.settings._promptChanged:
             PS1Prompt, styleDict = stringToPrompt(ms.settings['Settings']['prompt'])
             PS2Prompt = [('class:symbol', ms.settings['Settings']['secondarySymbol'])]
             promptStyle = Style.from_dict(styleDict)
-            usePS1Prompt = True; setupPrompt = False
+            usePS1Prompt = True
+            ms.settings._promptChanged = False
 
         # The command buffering loop: Keep buffering command fragments
         # according to the line protocol until a complete command is received
@@ -388,7 +386,7 @@ def doHelp(argv):
 
 
 def doSql(sql):
-    global args, setupPrompt
+    global args
     fullSql = " ".join(sql)
     retValue = QueryProcessor(args).process(fullSql)
     if retValue != ReturnCode.SUCCESS:
@@ -399,16 +397,13 @@ def doSql(sql):
     if fullSql[:4].lower() == "use ":
         ms.settings['Settings']['database'] = fullSql[4:]
         ms.settings['Settings']['table'] = ''
-        args.mainTableName = ''
-        # Update the prompt
-        setupPrompt = True
 
     return ReturnCode.SUCCESS
 
 def doQuit(argv):
-    global settingsChanged, programSettingsFile
+    global programSettingsFile
 
-    if settingsChanged:
+    if ms.settings._changed:
         choice = button_dialog(title='Save before quitting?',
                 text='Save changes to your MINIQUERY settings before quitting?',
                 buttons=[('Yes',True), ('No',False), ('Cancel',None)])
@@ -420,11 +415,10 @@ def doQuit(argv):
             # Try to write the config file
             programSettingsFile = choice
             ms.settings.filename = programSettingsFile
-            if ms.settings.write() == ReturnCode.FILE_NOT_WRITABLE:
+            if ms.settings.save() == ReturnCode.FILE_NOT_WRITABLE:
                 exc = em.getException()
                 em.doWarn()
                 return ReturnCode.SUCCESS
-            settingsChanged = False
             return em.setError(ReturnCode.USER_EXIT)
         elif choice == None:     # User pressed Cancel
             return ReturnCode.SUCCESS
@@ -437,10 +431,10 @@ def doQuit(argv):
         return ReturnCode.SUCCESS
 
 def doSave(argv):
-    global settingsChanged, programSettingsFile
+    global programSettingsFile
     argc = len(argv)
 
-    if settingsChanged:
+    if ms.settings._changed:
         # Save program settings, variables and aliases
         if ms.isOutputTty:
             choice = MiniFileDialog('Save Settings File', programSettingsFile,
@@ -453,11 +447,10 @@ def doSave(argv):
         if choice:
             programSettingsFile = choice
             ms.settings.filename = programSettingsFile
-            if ms.settings.write():    # Returns None on success. Do not use RC.SUCCESS here.
+            if ms.settings.save():    # Returns None on success. Do not use RC.SUCCESS here.
                 exc = em.getException()
                 em.doWarn()
                 return ReturnCode.SUCCESS
-            settingsChanged = False
     else:
         em.doWarn(msg='No unsaved changes.')
 
@@ -496,7 +489,7 @@ def doFormat(argv):
     return ReturnCode.SUCCESS
 
 def doSetDatabase(argv):
-    global args, setupPrompt, settingsChanged
+    global args
 
     # Do not allow simple erasure of the db name. Bring up a selection dlg
     # offering the option to cancel back to the current name. Since the set
@@ -559,15 +552,11 @@ def doSetDatabase(argv):
     cxnSettings['FullPath']['MINI_DBPATH'] = \
         cxnSettings['FullPath']['MINI_DBPATH'].replace(currDbName, dbName)
     ms.settings['Settings']['table'] = activeDb.config.get('anchorTable', '')
-    args.mainTableName = activeDb.config.get('anchorTable', '')
     dbConn.changeDatabase(activeDb.dbName)
-    # Update the prompt
-    setupPrompt = True
-    settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doSetTable(argv):
-    global args, setupPrompt, settingsChanged
+    global args
 
     currDbName = ms.settings['Settings']['database']
     tableList = dataConfig.databases[currDbName].tableNames
@@ -594,20 +583,12 @@ def doSetTable(argv):
         return ReturnCode.SUCCESS
     ms.settings['Settings']['table'] = tableName
     dataConfig.databases[currDbName].changeAnchorTable(tableName)
-    args.mainTableName = tableName
-    setupPrompt = True
-    settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doClearTable(argv):
-    global setupPrompt, settingsChanged
-
-    ms.settings['Settings']['table']=''
+    ms.settings['Settings']['table'] = ''
     currDbName = ms.settings['Settings']['database']
     dataConfig.databases[currDbName].changeAnchorTable('')
-    args.mainTableName = ''
-    setupPrompt = True
-    settingsChanged = True
     return ReturnCode.SUCCESS
 
 def doSource(argv):
@@ -755,20 +736,25 @@ def doGetVariable(argv):
 
 def doUnset(argv):
     argc = len(argv)
+    settingName = None
     category = 'Settings'
     subcategory = None
 
     if argc >= 1:
         settingName = argv[0]
 
-    if not settingName in ms.settings['Settings']:
-        for d in ms.settings['ConnectionString']:
-            if isinstance(d, dict) and settingName in d:
-                category = 'ConnectionString'
-                subcategory = d
-                break
+        if not settingName in ms.settings['Settings']:
+            for k,v in ms.settings['ConnectionString'].items():
+                if isinstance(v, dict) and settingName in v:
+                    category = 'ConnectionString'
+                    subcategory = k
+                    break
+                elif k == settingName:
+                    category = 'ConnectionString'
+                    break
 
     _unsetValueCommand("unset", argv, 'settingName', category, subcategory)
+
     return ReturnCode.SUCCESS
 
 def doAlias(argv):
@@ -776,7 +762,7 @@ def doAlias(argv):
     return ReturnCode.SUCCESS
 
 def doUnalias(argv):
-    _unsetValueCommand("unseta", argv, 'aliasName', 'Aliases')
+    _unsetValueCommand("unseta", argv, 'aliasName', 'Aliases', keepKey=False)
     return ReturnCode.SUCCESS
 
 def doSetVariable(argv):
@@ -784,7 +770,7 @@ def doSetVariable(argv):
     return ReturnCode.SUCCESS
 
 def doUnsetVariable(argv):
-    _unsetValueCommand("unsetv", argv, 'variable', 'Variables')
+    _unsetValueCommand("unsetv", argv, 'variable', 'Variables', keepKey=False)
     return ReturnCode.SUCCESS
 
 def doCompleter(argv):
@@ -802,7 +788,7 @@ def doCompleter(argv):
 # Accepts a typed-in value, but if none is provided brings up a selection dialog
 def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
             subcategory=None, canCancel=True):
-    global endlineProtocol, settingsChanged
+    global endlineProtocol
 
     if userEntry:
         if userEntry in lst:
@@ -814,7 +800,6 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                 # Update cached local copies of settings
                 if setting == 'endlineProtocol':
                     endlineProtocol = userEntry
-            settingsChanged = True
         else:
             #TODO: Before assuming a user error, offer pop-up autocompletion from the list provided
             length = len(lst)
@@ -838,7 +823,6 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
                 # Update cached local copies of settings
                 if setting == 'endlineProtocol':
                     endlineProtocol = buttonList[choice][0]
-            settingsChanged = True
 
     return choice
 
@@ -851,7 +835,7 @@ def _chooseValueFromList(lst, category, setting, title, text, userEntry='',
 # "settings," per se: aliases, variables and abbreviations. The distinction is
 # noted in the "command" argument.
 def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None):
-    global settingsChanged, continuer, delimiter
+    global continuer, delimiter
     argc = len(argv)
 
     if argc == 0:
@@ -882,7 +866,6 @@ def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None
                 ms.settings[category][subcategory][var] = val
             else:
                 ms.settings[category][var] = val
-        settingsChanged = True
     elif argc == 2:
         var = argv[0]; val = argv[1]
         if subcategory:
@@ -893,25 +876,38 @@ def _setArbitraryValue(command, argv, lhs, rhs, category, desc, subcategory=None
                 continuer = val
             elif var == 'delimiter':
                 delimiter = val
-        settingsChanged = True
     return ReturnCode.SUCCESS
 
-def _unsetValueCommand(command, argv, objName, category):
-    global settingsChanged
+def _unsetValueCommand(command, argv, settingName, category, subcategory=None, keepKey=True):
+    '''
+    Generically handles unset-like commands given the precise location of the
+    setting in question in the settings tree.
+    '''
 
     argc = len(argv)
-    if argc != 2:
-        print('USAGE: {} <{}>'.format(command, objName))
+    if argc != 1:
+        print('USAGE: {} <{}>'.format(command, settingName))
         return
     else:
         if category == 'Settings':
             # Settings cannot be *removed*
-            print('Error: MINIQUERY system setting "' + objName
+            print('Error: MINIQUERY system setting "' + settingName
                     + '" cannot be unset, only changed.')
             return
         else:
-            del ms.settings[category][argv[0]]
-            settingsChanged = True
+            entryName = argv[0]
+            if subcategory:
+                if keepKey:
+                    ms.settings[category][subcategory][entryName] = None
+                else:
+                    del ms.settings[category][subcategory][entryName]
+                    ms.settings._changed = True   # cannot hide this inside __setitem__()
+            else:
+                if keepKey:
+                    ms.settings[category][entryName] = None
+                else:
+                    del ms.settings[category][entryName]
+                    ms.settings._changed = True   # cannot hide this inside __setitem__()
         return
 
 # Fcn names cannot be used until the fns have been defined, so this is 

@@ -59,7 +59,7 @@ class ArgumentClassifier:
         """
         Initialize an ArgumentClassifier object.
         """
-        self.mainTableName = ''
+        self._mainTableName = ''
         self._commandName = ''
         self._argumentTree = {}
         self._operators = []
@@ -159,7 +159,7 @@ class ArgumentClassifier:
         self._isQueryCommand = self._commandName in tqlCommands or not self._isExplicitCommand
 
         # Initialize the table name now if it's been set
-        self.mainTableName = ms.settings['Settings']['table']
+        self._mainTableName = ms.settings['Settings']['table']
 
         # Begin the options vector with the fallback options
         self._options = ArgumentClassifier._persistentOptions.copy()
@@ -208,8 +208,8 @@ class ArgumentClassifier:
                     self._operators.append(self.Operator(operator, cellNumber))
 
                 # For query commands, if the table is not set the first non-prefix argument is table name
-                if self._isQueryCommand and not prefix and not self.mainTableName:
-                    self.mainTableName = word
+                if self._isQueryCommand and not prefix and not self._mainTableName:
+                    self._mainTableName = word
                 # Otherwise store the argument in the prefix-based classification tree
                 else:
                     if not self._argumentTree.get(prefix):

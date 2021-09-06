@@ -25,7 +25,9 @@ function generate_c_file() {
     echo Generating C file $GENERATED_CFILE ...
     # Accomodate dependencies on util library
     sed -i -e 's/miniGlobals /utilIncludes /' ${SRC_DIR}/argumentClassifier.py
+    sed -i -e 's/miniConfigObj /utilIncludes /' ${SRC_DIR}/appSettings.py
     "$CYTHON" -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
+    sed -i -e 's/utilIncludes /miniConfigObj /' ${SRC_DIR}/appSettings.py
     sed -i -e 's/utilIncludes /miniGlobals /' ${SRC_DIR}/argumentClassifier.py
     ls -l "$GENERATED_CFILE"
 }
