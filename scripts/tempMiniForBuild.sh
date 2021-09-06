@@ -4,7 +4,7 @@
 # is designed to be a runnable python script as-is.
 # But when building the executable binary, a few changes need to be made so
 # the build process can find all the modules and transpile, compile, and link them.
-# This script makes those changes.
+# This script writes a temporary file with those changes.
 
 WORKING_DIR=$HOME/projects/miniquery/scripts
 SOURCE_FILE=$WORKING_DIR/mini.py
