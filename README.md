@@ -1,2 +1,2 @@
 # miniquery
-TUI front end to TQL.
+TUI front end for TQL.
