@@ -1094,6 +1094,11 @@ class MiniSection(Section):
         if key in ['database', 'table']:  # Omit MINI_USER and MINI_HOST
             self.main._promptChanged = True
 
+    def __delitem__(self, key, unrepr=False):
+        Section.__delitem__(self, key, unrepr)
+        self.main._changed = True
+        if key in ['database', 'table']:  # Omit MINI_USER and MINI_HOST
+            self.main._promptChanged = True
 
 class MiniConfigObj(MiniSection):
     """

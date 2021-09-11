@@ -28,30 +28,28 @@ extendedTqlCommands= [
 #    ['ddb', 'drop database'],
 ]
 
-# Format of the command list: [command name, argument syntax, short description]
-# All 3 items are used together in the "help" command.
-# The first item is used for command (auto-)completion.
+# Format of the command list: [command name, argument syntax, short description, 'do'+callbackName if different from 'do'+Cmd]
+# This is used for help, autocompletion, and dispatch to callbacks
 commandList = [
-    ['sq',      '<query>',        'Execute a literal SQL statement'],
+    ['sq',      '<query>',        'Execute a literal SQL statement',    'Sql'],
     ['quit',    '',               'Exit MINIQUERY'],
     ['help',    '',               'Summary help for MINIQUERY commands'],
-    ['history', '<count>',        'Display command history' ],
-    ['db',      '<name>',         'Set the active database'],
-    ['table',   '<name>',         'Set the active table name'],
-    ['clear',   '',               'Clear the active table name'],
-#    ['mode']   : doMode,
+    ['history', '<count>',        'Display command history'],
+    ['db',      '<name>',         'Set the active database',            'SetDatabase'],
+    ['table',   '<name>',         'Set the active table name',          'SetTable'],
+    ['clear',   '',               'Clear the active table name',        'ClearTable'],
     ['format',  '',               'Select a format for query output'],
     ['set',     '<name>=<value>', 'Set a MINIQUERY program setting'],
-    ['seta',    '<alias>=<cmd>',  'Set up an alias for a command'],
-    ['setv',    '<name>=<value>', 'Set a variable'],
+    ['seta',    '<alias>=<cmd>',  'Set up an alias for a command',      'Alias'],
+    ['setv',    '<name>=<value>', 'Set a variable',                     'SetVariable'],
     ['get',     '<setting>',      'Inspect a MINIQUERY program setting'],
-    ['geta',    '<alias name>',   'Inspect an alias'],
-    ['getv',    '<variable>',     'Inspect a variable'],
+    ['geta',    '<alias name>',   'Inspect an alias',                   'GetAlias'],
+    ['getv',    '<variable>',     'Inspect a variable'                  'GetVariable'],
     ['save',    '',               'Save MINIQUERY settings, aliases and variables'],
     ['source',  '<file>',         'Read and execute commands from a file'],
     ['unset',   '<name>',         'Unset a MINIQUERY setting'],
-    ['unseta',  '<name>',         'Unset an alias'],
-    ['unsetv',  '<variable>',     'Unset a variable'],
+    ['unseta',  '<name>',         'Unset an alias',                     'Unalias'],
+    ['unsetv',  '<variable>',     'Unset a variable'                    'UnsetVariable'],
 #    ['cp']     : doCompleter,
 ]
 
