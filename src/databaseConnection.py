@@ -53,7 +53,7 @@ class databaseConnection():
         if self._cxn:
             return self._cxn
         
-        cxnSettings = ms.settings['ConnectionString']
+        cxnSettings = ms.connection
         defType = cxnSettings['definitionType']
 
         # Construct the connection string from the connection parms.
@@ -123,7 +123,7 @@ class databaseConnection():
             userHostPart = '{}{}'.format(userPart, hostPart)
 
         dbNamePart = ''
-        dbName = ms.settings['Settings']['database']
+        dbName = ms.settings['database']
         if dbName:
             if cxnSettings[defType]['MINI_DRIVER_OPTIONS']:
                 dbNamePart = '{}?{}'.format(dbName,

@@ -37,23 +37,52 @@ class MiniSettings(MiniConfigObj):
         self.write()
         self._promptChanged = self._changed = False
 
-
-# The appSettings class manages the Miniquery program "settings" (not to be confused
-# with the database "configurations").
-# The settings include customizable user preferences as well as system
-# properties determined at startup such as the operating system type.
-# The customizable settings are stored in $MINI_CONFIG/mini.cfg.
-# They can be customized at the user level with $HOME/.minirc.
-
-class appSettings():
+class AppSettings():
+    '''
+    The appSettings class manages the Miniquery program "settings" (not to be
+    confused with the database- and table-specific "configurations").
+    The settings include customizable user preferences read from a cfg file
+    as well as system properties not subject to editing.
+    The customizable settings are normally stored in a file chosen by the user,
+    by default $HOME/.minirc, falling back on $MINI_CONFIG/mini.cfg if no such
+    file is given.)
+    '''
 
     def __init__(self):
-        self.settings = None
+        self._settings = None
         self.isInputTty = sys.stdin.isatty()
         self.isOutputTty = sys.stdout.isatty()
         self.ostype = platform.system()
 
+    '''
+    Define convenience getter methods for 'Settings' and 'ConnectionString'
+    subtrees of the settings object so we can say "ms.settings" instead of
+    "ms._settings['Settings']". (Due to the tree structure,
+    it doesn't make much sense to implement setter methods.)
+    '''
+
+    @property
+    def settings(self):
+        return self._settings['Settings']
+    @property
+    def connection(self):
+        return self._settings['ConnectionString']
+    @property
+    def aliases(self):
+        return self._settings['Aliases']
+    @property
+    def variables(self):
+        return self._settings['Variables']
+
+    def isChanged(self):
+        return self._settings._changed
+    def isPromptChanged(self):
+        return self._settings._promptChanged
+
     def loadSettings(self, userSettingsFile):
+        '''
+        Reads the settings from disk and validates them
+        '''
         cfgSpec = os.path.join(env.MINI_CONFIG, 'configspec.cfg')
         validator = Validator()
         msg = ''
@@ -61,7 +90,7 @@ class appSettings():
         # Load the settings from the user-specific file if it is available.
         if os.path.isfile(userSettingsFile):
             try:
-                self.settings = MiniSettings(userSettingsFile, configspec=cfgSpec,
+                self._settings = MiniSettings(userSettingsFile, configspec=cfgSpec,
                         # file_error catches nonexistence of file
                         file_error=True)
 
@@ -69,8 +98,7 @@ class appSettings():
                 # by the "definition type" attribute. If that section is missing
                 # from the config, this check will raise a KeyError. We will
                 # allow the other definition-type sections to be absent.
-                hasConnString = self.settings['ConnectionString'][self.settings[ \
-                        'ConnectionString']['definitionType']]
+                hasConnString = self.connection[self.connection['definitionType']]
 
             # ConfigObjError catches file format problems. IOError goes with file_error.
             except (ConfigObjError, IOError) as e:
@@ -81,18 +109,18 @@ class appSettings():
 #TODO Is this "setError()" the right way to handle this?
 #TODO Also, dup. all fxy from userSettingsFile section to globalSettingsFile section below.
                 return em.setError(ReturnCode.CONFIG_MISSING_REQUIRED_SECTION, userSettingsFile, 
-                        self.settings['ConnectionString']['definitionType'])
+                        self.connection['definitionType'])
 
             # Validation catches bad values in the config file
             # See  https://pythonhosted.org/theape/documentation/developer/
             #            explorations/explore_configobj/validation_errors.html
             # and  http://www.voidspace.org.uk/python/articles/configobj.shtml
-            results = self.settings.validate(validator, preserve_errors=True)
+            results = self._settings.validate(validator, preserve_errors=True)
             if results == True:
                 return ReturnCode.SUCCESS
             else:
                 msg = 'Validation failures:\n'
-                for (section_list, key, error) in flatten_errors(self.settings, results):
+                for (section_list, key, error) in flatten_errors(self._settings, results):
                     
                     section_path = '.'.join(section_list)
 
@@ -104,7 +132,7 @@ class appSettings():
                             continue
 
                         # Walk the section_list to get the datum
-                        d = self.settings
+                        d = self._settings
                         for s in section_list:
                             d = d[s]
 
@@ -128,13 +156,13 @@ class appSettings():
         globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
         if os.path.isfile(globalSettingsFile):
             try:
-                self.settings = MiniSettings(globalSettingsFile, configspec=cfgSpec,
+                self._settings = MiniSettings(globalSettingsFile, configspec=cfgSpec,
                         file_error=True)
             except (ConfigObjError, IOError) as e:
                 return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, cfgSpec)
-            results = self.settings.validate(validator, preserve_errors=True)
+            results = self._settings.validate(validator, preserve_errors=True)
             if results != True:
-                for (section_list, key, error) in flatten_errors(self.settings, results):
+                for (section_list, key, error) in flatten_errors(self._settings, results):
                     if key is not None:
                         print ('The "{}" key in the section "{}" failed validation'.format(key, ', '.join(section_list)))
                     else:
@@ -145,4 +173,4 @@ class appSettings():
 # Instantiate a global object that can be made visible everywhere with
 # an easy import. Function main() will populate it. 
 # Better than passing it all over as a function parameter.
-miniSettings = appSettings()
+miniSettings = AppSettings()

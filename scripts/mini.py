@@ -53,11 +53,11 @@ class MiniqueryApp():
 
     def dispatchCommand(self, cmd):
         # Unravel aliases and variables
-        leader = ms.settings['Settings']['leader']
+        leader = ms.settings['leader']
         if cmd.startswith(leader):
-            cmd = _unravelVariables(_unravelAliases(cmd, leader))
+            cmd = self._unravelVariables(self._unravelAliases(cmd, leader))
         else:
-            cmd = _unravelVariables(cmd)
+            cmd = self._unravelVariables(cmd)
     
         # Preprocess the command and distinguish system commands from queries
         argv = commandToWordList(cmd)
@@ -112,7 +112,7 @@ class MiniqueryApp():
 
         l = list(reversed(self._historyObject.get_strings()))
         available = len(l)
-        requested = int(argv[0] if argc > 0 else ms.settings['Settings']['historyLength'])
+        requested = int(argv[0] if argc > 0 else ms.settings['historyLength'])
         print("\n".join(l[0:min(available, requested)]))
         return ReturnCode.SUCCESS
 
@@ -131,26 +131,26 @@ class MiniqueryApp():
         return ReturnCode.SUCCESS
 
     def doQuit(self, argv):
-        if ms.settings._changed:
+        if ms.isChanged():
             choice = button_dialog(title='Save before quitting?',
                     text='Save changes to your MINIQUERY settings before quitting?',
                     buttons=[('Yes',True), ('No',False), ('Cancel',None)])
-            if choice:     # User pressed Yes
+            if choice:     # User pressed Yes: Try to save then quit
                 choice = MiniFileDialog('Save Settings File', self._programSettingsFile,
                         can_create_new=True)
                 if not choice:
                     return ReturnCode.SUCCESS
                 # Try to write the config file
                 self._programSettingsFile = choice
-                ms.settings.filename = self._programSettingsFile
-                if ms.settings.save() == ReturnCode.FILE_NOT_WRITABLE:
+                ms._settings.filename = self._programSettingsFile
+                if ms._settings.save() == ReturnCode.FILE_NOT_WRITABLE:
                     exc = em.getException()
                     em.doWarn()
                     return ReturnCode.SUCCESS
                 return em.setError(ReturnCode.USER_EXIT)
-            elif choice == None:     # User pressed Cancel
+            elif choice == None:     # User pressed Cancel: Resume normal execution
                 return ReturnCode.SUCCESS
-            elif choice == False:     # User pressed No
+            elif choice == False:     # User pressed No: Quit immediately
                 return em.setError(ReturnCode.USER_EXIT)
         else:
             if yes_no_dialog(title='Quit MINIQUERY',
@@ -161,7 +161,7 @@ class MiniqueryApp():
     def doSave(self, argv):
         argc = len(argv)
 
-        if ms.settings._changed:
+        if ms.isChanged():
             # Save program settings, variables and aliases
             if ms.isOutputTty:
                 choice = MiniFileDialog('Save Settings File', self._programSettingsFile,
@@ -173,15 +173,15 @@ class MiniqueryApp():
 
             if choice:
                 self._programSettingsFile = choice
-                ms.settings.filename = self._programSettingsFile
-                if ms.settings.save() == ReturnCode.FILE_NOT_WRITABLE:
+                ms._settings.filename = self._programSettingsFile
+                if ms._settings.save() == ReturnCode.FILE_NOT_WRITABLE:
                     exc = em.getException()
                     em.doWarn()
                     return ReturnCode.SUCCESS
         else:
             em.doWarn(msg='No unsaved changes.')
 
-        dbConfig = dataConfig.databases[ms.settings['Settings']['database']]
+        dbConfig = dataConfig.databases[ms.settings['database']]
         if dbConfig.configChanges:
             # Save DB config and reset configChanges
             if dbConfig.saveConfigChanges() != ReturnCode.SUCCESS:
@@ -189,7 +189,7 @@ class MiniqueryApp():
         return ReturnCode.SUCCESS
 
     def doSetTable(self, argv):
-        currDbName = ms.settings['Settings']['database']
+        currDbName = ms.settings['database']
         tableList = dataConfig.databases[currDbName].tableNames
         if not tableList:
             em.setError(ReturnCode.Clarification)
@@ -207,12 +207,12 @@ class MiniqueryApp():
                 em.setError(ReturnCode.TABLE_NOT_FOUND)
                 em.doWarn()
 
-        currAnchorTable = ms.settings['Settings']['table']
+        currAnchorTable = ms.settings['table']
         if tableName == currAnchorTable:
             em.setError(ReturnCode.Clarification)
             em.doWarn("Anchor table is already " + currAnchorTable + ".")
             return ReturnCode.SUCCESS
-        ms.settings['Settings']['table'] = tableName
+        ms.settings['table'] = tableName
         dataConfig.databases[currDbName].changeAnchorTable(tableName)
         return ReturnCode.SUCCESS
 
@@ -239,7 +239,7 @@ class MiniqueryApp():
         else:
             dbName = argv[0] if len(argv) > 0 else ''
 
-        currDbName = ms.settings['Settings']['database']
+        currDbName = ms.settings['database']
         if dbName == currDbName:
             em.setError(ReturnCode.Clarification)
             em.doWarn("Database is already " + currDbName + ".")
@@ -282,13 +282,12 @@ class MiniqueryApp():
         # Complete the transition to the new / other DB
     #TODO: Clean up / encapsulate this big time.
         activeDb = dataConfig.setActiveDatabase(dbName)
-        ms.settings['Settings']['database'] = activeDb.dbName
-        cxnSettings = ms.settings['ConnectionString']
-        cxnSettings['FullString']['MINI_CONNECTION_STRING'] = \
-            cxnSettings['FullString']['MINI_CONNECTION_STRING'].replace(currDbName, dbName)
-        cxnSettings['FullPath']['MINI_DBPATH'] = \
-            cxnSettings['FullPath']['MINI_DBPATH'].replace(currDbName, dbName)
-        ms.settings['Settings']['table'] = activeDb.config.get('anchorTable', '')
+        ms.settings['database'] = activeDb.dbName
+        ms.connection['FullString']['MINI_CONNECTION_STRING'] = \
+            ms.connection['FullString']['MINI_CONNECTION_STRING'].replace(currDbName, dbName)
+        ms.connection['FullPath']['MINI_DBPATH'] = \
+            ms.connection['FullPath']['MINI_DBPATH'].replace(currDbName, dbName)
+        ms.settings['table'] = activeDb.config.get('anchorTable', '')
         dbConn.changeDatabase(activeDb.dbName)
         return ReturnCode.SUCCESS
 
@@ -318,7 +317,7 @@ class MiniqueryApp():
     def doHelp(self, argv):
         if not argv:
             print('\nMINIQUERY COMMANDS:\n')
-            ldr = ms.settings['Settings']['leader']
+            ldr = ms.settings['leader']
             leftSide = ['{} {}'.format(c[0], c[1]) for c in commandList]
             print('\n'.join(['  {}{:<20}: {}'.format(ldr,l,c[2]) for l,c in zip(leftSide,commandList)]))
         else:
@@ -327,8 +326,8 @@ class MiniqueryApp():
         return ReturnCode.SUCCESS
 
     def doClearTable(self, argv):
-        ms.settings['Settings']['table'] = ''
-        currDbName = ms.settings['Settings']['database']
+        ms.settings['table'] = ''
+        currDbName = ms.settings['database']
         dataConfig.databases[currDbName].changeAnchorTable('')
         return ReturnCode.SUCCESS
 
@@ -350,17 +349,17 @@ class MiniqueryApp():
         elif argc == 0:
             # Provide USAGE help.
             self._setArbitraryValue("set", argv, 'settingName', 'value',
-                    category, 'your preferred setting', subcategory)
+                    None, 'your preferred setting')
             return ReturnCode.SUCCESS
 
         # Locate the setting in the internal configuration data structure
-        if settingName in ms.settings['Settings']:
+        if settingName in ms.settings:
             category = 'Settings'
         else:
-            for d in ms.settings['ConnectionString']:
-                if isinstance(d, dict) and settingName in d:
-                    category = 'ConnectionString'
-                    subcategory = d
+            for d in ms.connection.items():
+                if isinstance(d[1], dict) and settingName in d[1]:
+                    category = 'Connection'
+                    subcategory = d[0]
                     break
             if not category:
                 print('Invalid setting name "' + settingName + '".')
@@ -388,26 +387,26 @@ class MiniqueryApp():
         else:
             settingName = argv[0]
             if settingName == '*':
-                for s in ms.settings['Settings'].items():
+                for s in ms.settings.items():
                     print(s[0] + ': ' + str(s[1]))
                 print()
-                for s in ms.settings['ConnectionString'].items():
+                for s in ms.connection.items():
                     if isinstance(s[1], dict):
                         for s1 in s[1].items():
                             print(s1[0] + ': ' + str(s1[1]))
                     else:
                         print(s[0] + ': ' + str(s[1]))
-            elif settingName in ms.settings['Settings']:
-                print(settingName + ': ' + str(ms.settings['Settings'][settingName]))
+            elif settingName in ms.settings:
+                print(settingName + ': ' + str(ms.settings[settingName]))
             else:
                 found = False
-                for s in ms.settings['ConnectionString'].items():
+                for s in ms.connection.items():
                     if isinstance(s[1], dict) and settingName in s[1]:
-                        print(settingName + ': ' + str(ms.settings['ConnectionString'][s[0]][settingName]))
+                        print(settingName + ': ' + str(ms.connection[s[0]][settingName]))
                         found = True
                         break
                     elif settingName == s[0]:
-                        print(settingName + ': ' + str(ms.settings['ConnectionString'][settingName]))
+                        print(settingName + ': ' + str(ms.connection[settingName]))
                         found = True
                         break
                 if not found:
@@ -424,8 +423,8 @@ class MiniqueryApp():
         if argc >= 1:
             settingName = argv[0]
 
-            if not settingName in ms.settings['Settings']:
-                for k,v in ms.settings['ConnectionString'].items():
+            if not settingName in ms.settings:
+                for k,v in ms.connection.items():
                     if isinstance(v, dict) and settingName in v:
                         category = 'ConnectionString'
                         subcategory = k
@@ -447,10 +446,10 @@ class MiniqueryApp():
         else:
             aliasName = argv[0]
             if aliasName == '*':
-                for a in ms.settings['Aliases'].items():
+                for a in ms.aliases.items():
                     print(a[0] + ': ' + a[1])
-            elif aliasName in ms.settings['Aliases']:
-                print(aliasName + ': ' + ms.settings['Aliases'][aliasName])
+            elif aliasName in ms.aliases:
+                print(aliasName + ': ' + ms.aliases[aliasName])
             else:
                 print('Error: Alias ' + aliasName + ' not found.')
 
@@ -465,10 +464,10 @@ class MiniqueryApp():
         else:
             varName = argv[0]
             if varName == '*':
-                for v in ms.settings['Variables'].items():
+                for v in ms.variables.items():
                     print(v[0] + ': ' + v[1])
-            elif varName in ms.settings['Variables']:
-                print(varName + ': ' + ms.settings['Variables'][varName])
+            elif varName in ms.variables:
+                print(varName + ': ' + ms.variables[varName])
             else:
                 print('Error: Variable ' + varName + ' not found.')
 
@@ -495,7 +494,7 @@ class MiniqueryApp():
 
     def _unravelAliases(self, cmd, leader):
         strippedCmd = cmd.lstrip(leader)
-        for a in ms.settings['Aliases']:
+        for a in ms.aliases:
             # We have an alias when the cmd "starts with" an alias.
             # We have to recognize false "aliases" that are
             # simply proper substrings of a longer command name
@@ -505,7 +504,7 @@ class MiniqueryApp():
                 except IndexError:
                     isAlias = True
                 if isAlias:
-                    cmd = cmd.replace(a, ms.settings['Aliases'][a], 1)
+                    cmd = cmd.replace(a, ms.aliases[a], 1)
                     break
         return cmd
 
@@ -518,15 +517,15 @@ class MiniqueryApp():
             if protectedVariable:
                 varName = protectedVariable.group(1)
                 try:
-                    cmd = re.sub(re.escape(protectedVariable.group(0)), ms.settings['Variables'][varName], cmd)
+                    cmd = re.sub(re.escape(protectedVariable.group(0)), ms.variables[varName], cmd)
                 except KeyError:
                     print('Unknown variable "' + varName + "'")
                     return cmd
             nakedVariable = re.search(r'\$(\w+)', cmd)
-            if nakedVariable and ms.settings['Variables']:
+            if nakedVariable and ms.variables:
                 containingString = nakedVariable.group(1)
                 maxNameVariable = ('','')
-                for var in ms.settings['Variables'].items():
+                for var in ms.variables.items():
                     if containingString.startswith(var[0]) and var[0].startswith(maxNameVariable[0]):
                         maxNameVariable = var
                 if maxNameVariable[0]:
@@ -543,13 +542,15 @@ class MiniqueryApp():
         '''
         Accepts or prompts for an input value from a small set of valid options.
         '''
+        category = category.lower()
+
         if userEntry:
             if userEntry in lst:
                 choice = lst.index(userEntry)
                 if subcategory:
-                    ms.settings[category][subcategory][setting] = userEntry
+                    getattr(ms, category)[subcategory][setting] = userEntry
                 else:
-                    ms.settings[category][setting] = userEntry
+                    getattr(ms, category)[setting] = userEntry
             else:
                 #TODO: Before assuming a user error, offer pop-up autocompletion from the list provided
                 length = len(lst)
@@ -567,9 +568,9 @@ class MiniqueryApp():
             choice = button_dialog(title=title, text=text, buttons=buttonList)
             if choice >= 0:
                 if subcategory:
-                    ms.settings[category][subcategory][setting] = buttonList[choice][0]
+                    getattr(ms, category)[subcategory][setting] = buttonList[choice][0]
                 else:
-                    ms.settings[category][setting] = buttonList[choice][0]
+                    getattr(ms, category)[setting] = buttonList[choice][0]
         return choice
 
 
@@ -584,6 +585,7 @@ class MiniqueryApp():
         noted in the "command" argument.
         '''
         argc = len(argv)
+        category = category.lower()
 
         if argc == 0:
             print('USAGE: {0} <{1}>=<{2}>\n   or: {0} <{1}> <{2}>'.format(
@@ -594,9 +596,9 @@ class MiniqueryApp():
                 # Value assignment from the cmd line
                 var, eq, val = argv[0].partition('=')
                 if subcategory:
-                    ms.settings[category][subcategory][var] = val
+                    getattr(ms, category)[subcategory][var] = val
                 else:
-                    ms.settings[category][var] = val
+                    getattr(ms, category)[var] = val
             else:
                 # Value assignment from dialog box
                 var = argv[0]
@@ -606,15 +608,15 @@ class MiniqueryApp():
                     # Cancelled! Return without doing anything.
                     return ReturnCode.SUCCESS
                 elif subcategory:
-                    ms.settings[category][subcategory][var] = val
+                    getattr(ms,category)[subcategory][var] = val
                 else:
-                    ms.settings[category][var] = val
+                    getattr(ms,category)[var] = val
         elif argc == 2:
             var = argv[0]; val = argv[1]
             if subcategory:
-                ms.settings[category][subcategory][var] = val
+                getattr(ms, category)[subcategory][var] = val
             else:
-                ms.settings[category][var] = val
+                getattr(ms, category)[var] = val
         return ReturnCode.SUCCESS
 
     def _unsetValueCommand(self, command, argv, settingName, category, subcategory=None, keepKey=True):
@@ -637,14 +639,14 @@ class MiniqueryApp():
                 entryName = argv[0]
                 if subcategory:
                     if keepKey:
-                        ms.settings[category][subcategory][entryName] = None
+                        getattr(ms, category)[subcategory][entryName] = None
                     else:
-                        del ms.settings[category][subcategory][entryName]
+                        del getattr(ms, category)[subcategory][entryName]
                 else:
                     if keepKey:
-                        ms.settings[category][entryName] = None
+                        getattr(ms, category)[entryName] = None
                     else:
-                        del ms.settings[category][entryName]
+                        del getattr(ms, category)[entryName]
             return
 
 
@@ -654,6 +656,9 @@ def main():
     '''
     Main entry point for MINIQUERY
     '''
+    # Workaround for a bug in PDB debugger: State is not totally clean after restart
+    em.resetError()
+
     # Make a copy of sys.argv that we can edit. Pop off the program name in cell 0.
     argv = sys.argv.copy()
     programName = argv.pop(0)
@@ -676,7 +681,7 @@ def main():
     miniApp = MiniqueryApp(programSettingsFile)
 
     if ms.loadSettings(programSettingsFile) == ReturnCode.SUCCESS:
-        env.setDatabaseName(ms.settings['Settings']['database'])
+        env.setDatabaseName(ms.settings['database'])
     else:
         em.doExit()
 
@@ -712,7 +717,7 @@ def main():
     welcomeColor = 'green' if ms.ostype == 'Windows' else 'lightgreen'
     print_formatted_text(FormattedText([(welcomeColor, '\nWELCOME TO MINIQUERY!\n')]))
     print('Copyright (c) 2019-2021 Miniquery AMDG, LLC')
-    print('Enter {}help for help.'.format(ms.settings['Settings']['leader']))
+    print('Enter {}help for help.'.format(ms.settings['leader']))
 
     # Set up the command history
     histFileName = os.path.join(env.HOME, '.mini_history')
@@ -729,9 +734,9 @@ def main():
     # The infinite event loop: Accept and dispatch MINIQUERY commands
     while True:
 
-        if ms.settings._promptChanged:
-            PS1Prompt, styleDict = stringToPrompt(ms.settings['Settings']['prompt'])
-            PS2Prompt = [('class:symbol', ms.settings['Settings']['secondarySymbol'])]
+        if ms.isPromptChanged():
+            PS1Prompt, styleDict = stringToPrompt(ms.settings['prompt'])
+            PS2Prompt = [('class:symbol', ms.settings['secondarySymbol'])]
             promptStyle = Style.from_dict(styleDict)
             usePS1Prompt = True
             ms.settings._promptChanged = False
@@ -743,7 +748,7 @@ def main():
                 print()
                 cmdCompleter = CommandCompleter([])
 
-                editMode = ms.settings['Settings']['editMode']
+                editMode = ms.settings['editMode']
                 cmd = session.prompt(
                             PS1Prompt if usePS1Prompt else PS2Prompt,
                             style=promptStyle,
@@ -757,9 +762,9 @@ def main():
                     em.doWarn()
 
                 # Is end-of-command detected?
-                if cmd.endswith(ms.settings['Settings']['delimiter']) or (
-                        not cmd.endswith(ms.settings['Settings']['continuer']) and ms.settings['Settings']['endlineProtocol']== 'delimit'):
-                    cmdBuffer.append(cmd.rstrip(ms.settings['Settings']['delimiter']))
+                if cmd.endswith(ms.settings['delimiter']) or (
+                        not cmd.endswith(ms.settings['continuer']) and ms.settings['endlineProtocol']== 'delimit'):
+                    cmdBuffer.append(cmd.rstrip(ms.settings['delimiter']))
                     cmd = ' '.join(cmdBuffer)
                     cmdBuffer.clear()
                     usePS1Prompt = True
@@ -768,7 +773,7 @@ def main():
 
                 # Command continuation is indicated
                 else:
-                    cmdBuffer.append(cmd.rstrip(ms.settings['Settings']['continuer']))
+                    cmdBuffer.append(cmd.rstrip(ms.settings['continuer']))
                     usePS1Prompt = False
         except EOFError:
             break

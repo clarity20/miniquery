@@ -211,8 +211,8 @@ class QueryProcessor:
                 from appSettings import miniSettings; ms = miniSettings
                 dbCfg = tableCfg = None
                 try:
-                    dbCfg = cfg.databases[ms.settings['Settings']['database']]
-                    tableCfg = dbCfg.tables[ms.settings['Settings']['table']]
+                    dbCfg = cfg.databases[ms.settings['database']]
+                    tableCfg = dbCfg.tables[ms.settings['table']]
                 except KeyError:
                     pass
                 if self._columnToSortBy:

@@ -31,14 +31,14 @@ def stringToPrompt(s):
     # Data definitions for converting the input string to a prompt. We want some
     # of these to be re-evaluated every time in case the prompt should change.
     attribs = {
-        'p' : ('prompt', ms.settings['Settings']['promptSymbol']),
+        'p' : ('prompt', ms.settings['promptSymbol']),
         # See comments in mini.cfg: user must set MINI_USER and MINI_HOST for this to work.
-        'u' : ('user', ms.settings['ConnectionString']['Components']['MINI_USER']
+        'u' : ('user', ms.connection['Components']['MINI_USER']
             or '<unknown>'),
-        'h' : ('host', ms.settings['ConnectionString']['Components']['MINI_HOST']
+        'h' : ('host', ms.connection['Components']['MINI_HOST']
             or '<unknown>'),
-        'd' : ('db', ms.settings['Settings']['database'] or '<none>'),
-        't' : ('table', ms.settings['Settings']['table'] or '<none>'),
+        'd' : ('db', ms.settings['database'] or '<none>'),
+        't' : ('table', ms.settings['table'] or '<none>'),
         }
     colors = {
         'w' : 'white',  'b' : 'blue',   'p' : 'pink',

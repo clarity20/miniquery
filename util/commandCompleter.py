@@ -59,8 +59,8 @@ class CommandCompleter(Completer):
 
         # Strip off the MINIQUERY system command leader, leaving the command
         from appSettings import miniSettings; ms = miniSettings
-        if document.text_before_cursor.startswith(ms.settings['Settings']['leader']):
-            text = document.text_before_cursor.lstrip(ms.settings['Settings']['leader'])
+        if document.text_before_cursor.startswith(ms.settings['leader']):
+            text = document.text_before_cursor.lstrip(ms.settings['leader'])
         else:
             # Non-commands (i.e. queries) are not handled by this Completer
             return
@@ -82,9 +82,9 @@ class CommandCompleter(Completer):
                     if cmd == 'getv':
                         words.append('*')
                 elif cmd in ['set', 'get', 'unset']:   # user chooses a setting
-                    defType = ms.settings['ConnectionString']['definitionType']
-                    words = list(ms.settings['Settings']) + ['definitionType'] \
-                            + list(ms.settings['ConnectionString'][defType])
+                    defType = ms.connection['definitionType']
+                    words = list(ms.settings) + ['definitionType'] \
+                            + list(ms.connection[defType])
                     if cmd == 'get':
                         words.append('*')
                 elif cmd in ['source', 'save']:
@@ -94,7 +94,7 @@ class CommandCompleter(Completer):
                 elif cmd == 'db':
                     words = [db for db in cfg.databases.keys()]
                 elif cmd == 'table':
-                    db = ms.settings['Settings']['database']
+                    db = ms.settings['database']
                     words = [t for t in cfg.databases[db].tableNames]
                 else:
                     words = settingOptionsMap[cmd][0]
@@ -103,7 +103,7 @@ class CommandCompleter(Completer):
         else:
             # The word is a command. Candidates are the commands and aliases.
             word_before_cursor = text
-            words = [c[0] for c in commandList] + list(ms.settings['Aliases'])
+            words = [c[0] for c in commandList] + list(ms.aliases)
         if self.ignore_case:
             word_before_cursor = word_before_cursor.lower()
 

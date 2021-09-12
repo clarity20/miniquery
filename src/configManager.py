@@ -61,7 +61,7 @@ class MasterDataConfig:
         filename = "{}/{}".format(env.MINI_CACHE, 'databases')
         self.loadDatabaseNames(filename)
         # Initialize the active DB
-        activeDbName = ms.settings['Settings']['database']
+        activeDbName = ms.settings['database']
         self.activeDatabase = self.setActiveDatabase(activeDbName)
         return ReturnCode.SUCCESS
 

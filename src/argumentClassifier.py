@@ -98,16 +98,15 @@ class ArgumentClassifier:
         # everything else, when present, serves to override
 
         # 1. runMode
-        settings = ms.settings['Settings']
-        if settings['runMode'] == 'both':
+        if ms.settings['runMode'] == 'both':
             cls._persistentOptions['r'] = True
             cls._persistentOptions['q'] = True
-        elif settings['runMode'] == 'query':
+        elif ms.settings['runMode'] == 'query':
             cls._persistentOptions['q'] = True
         else:
             cls._persistentOptions['r'] = True
         # 2. display format
-        mode = settings['format']
+        mode = ms.settings['format']
         cls._persistentOptions[mode] = True
 #TODO: 3. Anything else ??? continuer/delimiter?
 
@@ -159,7 +158,7 @@ class ArgumentClassifier:
         self._isQueryCommand = self._commandName in tqlCommands or not self._isExplicitCommand
 
         # Initialize the table name now if it's been set
-        self._mainTableName = ms.settings['Settings']['table']
+        self._mainTableName = ms.settings['table']
 
         # Begin the options vector with the fallback options
         self._options = ArgumentClassifier._persistentOptions.copy()
@@ -221,8 +220,8 @@ class ArgumentClassifier:
         # the config setting. The code that cares about this is in databaseCxn.py
         # where "args" is not readily accessible. So we set the value here.
         if 'p' in self._options:
-            defType = ms.settings['ConnectionString']['definitionType']
-            ms.settings['ConnectionString'][defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
+            defType = ms.connection['definitionType']
+            ms.connection[defType]['MINI_PASSWORD'] = self._options['p'] or fakePass
 
         return self
 
