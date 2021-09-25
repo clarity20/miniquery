@@ -24,7 +24,7 @@ from prompts import stringToPrompt
 sys.path.append(".." + os.sep + "util")
 from miniCompleter import MiniCompleter
 from commandCompleter import CommandCompleter
-from miniGlobals import settingOptionsMap, commandList
+from miniGlobals import settingOptionsMap, commandList, tqlCommands, tqlArgumentSummaries, tqlDescriptions
 from miniDialogs import yes_no_dialog, button_dialog, input_dialog, MiniListBoxDialog, MiniFileDialog
 
 class MiniFileHistory(FileHistory):
@@ -316,12 +316,18 @@ class MiniqueryApp():
 
     def doHelp(self, argv):
         if not argv:
-            print('\nMINIQUERY COMMANDS:\n')
             ldr = ms.settings['leader']
+            print('\nMINIQUERY HELP')
+
+            print('\nQueries:\n')
+            leftSide = ['{} {}'.format(c, tqlArgumentSummaries) for c in tqlCommands]
+            print('\n'.join(['  {}{:<20}: {}'.format(ldr, l, tqlDescriptions % c.upper()) for (l,c) in zip(leftSide, tqlCommands)]))
+
+            print('\nSystem commands:\n')
             leftSide = ['{} {}'.format(c[0], c[1]) for c in commandList]
             print('\n'.join(['  {}{:<20}: {}'.format(ldr,l,c[2]) for l,c in zip(leftSide,commandList)]))
         else:
-            #TODO print('FUTURE: command-specific help')
+            print('FUTURE: command-specific help')
             pass
         return ReturnCode.SUCCESS
 
