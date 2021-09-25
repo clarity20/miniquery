@@ -84,96 +84,83 @@ class AppSettings():
 
     def loadSettings(self, userSettingsFile):
         '''
-        Reads the settings from disk and validates them
+        Reads the settings from disk and validates them. Looks for the user-specific
+        settings file first, falling back on the default file otherwise.
         '''
-        cfgSpec = os.path.join(env.MINI_CONFIG, 'configspec.cfg')
+        self._cfgSpec = os.path.join(env.MINI_CONFIG, 'configspec.cfg')
         validator = Validator()
-        msg = ''
 
         # Load the settings from the user-specific file if it is available.
         if os.path.isfile(userSettingsFile):
-            try:
-                self._settings = MiniSettings(userSettingsFile, configspec=cfgSpec,
-                        # file_error catches nonexistence of file
-                        file_error=True)
+            return self._doLoadSettings(userSettingsFile, validator)
+        else:
+            # Fall back on the global settings only if the user's are unavailable.
+            globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
+            if os.path.isfile(globalSettingsFile):
+                return self._doLoadSettings(globalSettingsFile, validator)
 
-                # Verify the connection string is provided in a section named
-                # by the "definition type" attribute. If that section is missing
-                # from the config, this check will raise a KeyError. We will
-                # allow the other definition-type sections to be absent.
-                hasConnString = self.connection[self.connection['definitionType']]
 
-            # ConfigObjError catches file format problems. IOError goes with file_error.
-            except (ConfigObjError, IOError) as e:
-                return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, userSettingsFile)
-            except KeyError:    # Thrown if hasConnString (above) fails
-#                hasConnString = False
-#TODO The validation below doesn't catch this; that's why we handle it up here. 
-#TODO Is this "setError()" the right way to handle this?
-#TODO Also, dup. all fxy from userSettingsFile section to globalSettingsFile section below.
-                return em.setError(ReturnCode.CONFIG_MISSING_REQUIRED_SECTION, userSettingsFile, 
-                        self.connection['definitionType'])
+    def _doLoadSettings(self, settingsFile, validator):
+        try:
+            self._settings = MiniSettings(settingsFile, configspec=self._cfgSpec,
+                    # file_error catches nonexistence of file
+                    file_error=True)
 
-            # Validation catches bad values in the config file
-            # See  https://pythonhosted.org/theape/documentation/developer/
-            #            explorations/explore_configobj/validation_errors.html
-            # and  http://www.voidspace.org.uk/python/articles/configobj.shtml
-            results = self._settings.validate(validator, preserve_errors=True)
-            if results == True:
-                return ReturnCode.SUCCESS
-            else:
-                msg = 'Validation failures:\n'
-                for (section_list, key, error) in flatten_errors(self._settings, results):
-                    
-                    section_path = '.'.join(section_list)
+            # Verify the connection string is provided in a section named
+            # by the "definition type" attribute. If that section is missing
+            # from the config, this check will raise a KeyError. We will
+            # allow the other definition-type sections to be absent.
+            hasConnString = self.connection[self.connection['definitionType']]
 
-                    if key is not None:
+        # Catch file format problems and problems flagged by file_error (above).
+        except (ConfigObjError, IOError) as e:
+            return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, settingsFile)
+        # Catch errors thrown by hasConnString (above), since the main vaildation below doesn't catch them
+        except KeyError:
+            return em.setError(ReturnCode.CONFIG_MISSING_REQUIRED_SECTION, settingsFile,
+                self.connection['definitionType'])
 
-                        # Missing values
-                        if error == False:
-                            msg += '  Missing value: {}[{}]\n'.format(section_path, key)
-                            continue
-
-                        # Walk the section_list to get the datum
-                        d = self._settings
-                        for s in section_list:
-                            d = d[s]
-
-                        # Type-specific error handling of bad values
-                        if isinstance(error, VdtTypeError):
-                            desc = 'Incorrect data type'
-                        elif type(error) is VdtValueError:
-                            desc = 'Invalid option choice'
-                        elif isinstance(error, (VdtValueTooLongError, VdtValueTooShortError)):
-                            desc = 'String length outside legal range'
-                        elif isinstance(error, (VdtValueTooBigError, VdtValueTooSmallError)):
-                            desc = 'Numeric value is outside legal range'
-
-                        msg += '  {}: {}[{}] = {} (error = {})\n'.format(desc, section_path, key, d[key], error)
-
-                    else:
-                        msg += '  Missing section: {}\n'.format(section_path)
-                return em.setError(ReturnCode.CONFIG_VALIDATION_ERROR, userSettingsFile, msg)
-
-        # Fall back on the global settings only if the user's are unavailable.
-        globalSettingsFile = os.path.join(env.MINI_CONFIG, 'mini.cfg')
-        if os.path.isfile(globalSettingsFile):
-            try:
-                self._settings = MiniSettings(globalSettingsFile, configspec=cfgSpec,
-                        file_error=True)
-            except (ConfigObjError, IOError) as e:
-                return em.setError(ReturnCode.CONFIG_FILE_FORMAT_ERROR, cfgSpec)
-            results = self._settings.validate(validator, preserve_errors=True)
-            if results != True:
-                for (section_list, key, error) in flatten_errors(self._settings, results):
-                    if key is not None:
-                        print ('The "{}" key in the section "{}" failed validation'.format(key, ', '.join(section_list)))
-                    else:
-                        print ('The following section was missing: {}'.format(', '.join(section_list)))
-                return em.setError(ReturnCode.CONFIG_VALIDATION_ERROR, cfgSpec, msg)
+        # Validation catches bad values in the config file
+        # See  https://pythonhosted.org/theape/documentation/developer/
+        #            explorations/explore_configobj/validation_errors.html
+        # and  http://www.voidspace.org.uk/python/articles/configobj.shtml
+        msg = ''
+        results = self._settings.validate(validator, preserve_errors=True)
+        if results == True:
             return ReturnCode.SUCCESS
+        else:
+            msg = 'Validation failures:\n'
+            for (section_list, key, error) in flatten_errors(self._settings, results):
+ 
+                section_path = '.'.join(section_list)
 
-# Instantiate a global object that can be made visible everywhere with
-# an easy import. Function main() will populate it. 
-# Better than passing it all over as a function parameter.
+                if key is not None:
+
+                    # Missing values
+                    if error == False:
+                        msg += '  Missing value: {}[{}]\n'.format(section_path, key)
+                        continue
+
+                    # Walk the section_list to get the datum
+                    d = self._settings
+                    for s in section_list:
+                        d = d[s]
+
+                    # Type-specific error handling of bad values
+                    if isinstance(error, VdtTypeError):
+                        desc = 'Incorrect data type'
+                    elif type(error) is VdtValueError:
+                        desc = 'Invalid option choice'
+                    elif isinstance(error, (VdtValueTooLongError, VdtValueTooShortError)):
+                        desc = 'String length outside legal range'
+                    elif isinstance(error, (VdtValueTooBigError, VdtValueTooSmallError)):
+                        desc = 'Numeric value is outside legal range'
+
+                    msg += '  {}: {}[{}] = {} (error = {})\n'.format(desc, section_path, key, d[key], error)
+
+                else:
+                    msg += '  Missing section: {}\n'.format(section_path)
+            return em.setError(ReturnCode.CONFIG_VALIDATION_ERROR, settingsFile, msg)
+
+# Instantiate a global object. Function main() will populate it.
 miniSettings = AppSettings()
