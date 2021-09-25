@@ -73,6 +73,9 @@ class AppSettings():
     @property
     def variables(self):
         return self._settings['Variables']
+    @property
+    def completion(self):
+        return self._settings['Completion']
 
     def isChanged(self):
         return self._settings._changed

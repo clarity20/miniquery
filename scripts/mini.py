@@ -355,17 +355,17 @@ class MiniqueryApp():
         elif argc == 0:
             # Provide USAGE help.
             self._setArbitraryValue("set", argv, 'settingName', 'value',
-                    None, 'your preferred setting')
+                    'Settings', 'your preferred setting')
             return ReturnCode.SUCCESS
 
         # Locate the setting in the internal configuration data structure
         if settingName in ms.settings:
             category = 'Settings'
         else:
-            for d in ms.connection.items():
-                if isinstance(d[1], dict) and settingName in d[1]:
+            for (key, value) in ms.connection.items():
+                if isinstance(value, dict) and settingName in value:
                     category = 'Connection'
-                    subcategory = d[0]
+                    subcategory = key
                     break
             if not category:
                 print('Invalid setting name "' + settingName + '".')
@@ -393,25 +393,25 @@ class MiniqueryApp():
         else:
             settingName = argv[0]
             if settingName == '*':
-                for s in ms.settings.items():
-                    print(s[0] + ': ' + str(s[1]))
+                for (key,value) in sorted(ms.settings.items()):
+                    print(key + ': ' + str(value))
                 print()
-                for s in ms.connection.items():
-                    if isinstance(s[1], dict):
-                        for s1 in s[1].items():
-                            print(s1[0] + ': ' + str(s1[1]))
+                for (key, value) in ms.connection.items():
+                    if isinstance(value, dict):
+                        for (key1, value1) in value.items():
+                            print(key1 + ': ' + str(value1))
                     else:
-                        print(s[0] + ': ' + str(s[1]))
+                        print(key + ': ' + str(value))
             elif settingName in ms.settings:
                 print(settingName + ': ' + str(ms.settings[settingName]))
             else:
                 found = False
-                for s in ms.connection.items():
-                    if isinstance(s[1], dict) and settingName in s[1]:
-                        print(settingName + ': ' + str(ms.connection[s[0]][settingName]))
+                for (key, value) in ms.connection.items():
+                    if isinstance(value, dict) and settingName in value:
+                        print(settingName + ': ' + str(ms.connection[key][settingName]))
                         found = True
                         break
-                    elif settingName == s[0]:
+                    elif settingName == key:
                         print(settingName + ': ' + str(ms.connection[settingName]))
                         found = True
                         break

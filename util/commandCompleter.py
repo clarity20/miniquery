@@ -57,36 +57,51 @@ class CommandCompleter(Completer):
         if callable(words):
             words = words()
 
-        # Strip off the MINIQUERY system command leader, leaving the command
+        # Strip off the MINIQUERY command leader, leaving the command name
         from appSettings import miniSettings; ms = miniSettings
         if document.text_before_cursor.startswith(ms.settings['leader']):
             text = document.text_before_cursor.lstrip(ms.settings['leader'])
         else:
-            # Non-commands (i.e. queries) are not handled by this Completer
+            # Implicit commands are not handled by this Completer
             return
 
         # Get word before cursor. Determine whether it's a command name
-        # or a command argument
+        # or an argument to a command
         from miniGlobals import commandList, settingOptionsMap
+        doOverallSort = True
         if ' ' in text:
-            # The word is an argument. The candidate list depends on the command
+            # The word is an argument. The list of candidates depends on the command
             #word_before_cursor = document.get_word_before_cursor(WORD=self.WORD)
             cmd, x, word_before_cursor = text.partition(' ')
             try:
-                if cmd in ['geta', 'unseta']:          # user chooses an alias
-                    words = list(ms.settings['Aliases'])
-                    if cmd == 'geta':
-                        words.append('*')
-                elif cmd in ['getv', 'unsetv']:        # user chooses a variable
-                    words = list(ms.settings['Variables'])
-                    if cmd == 'getv':
-                        words.append('*')
-                elif cmd in ['set', 'get', 'unset']:   # user chooses a setting
-                    defType = ms.connection['definitionType']
-                    words = list(ms.settings) + ['definitionType'] \
-                            + list(ms.connection[defType])
-                    if cmd == 'get':
-                        words.append('*')
+                # Build the command-specific word list
+                # First check for get/set/unset-type commands
+                m = re.match(r'(g|s|uns)et(.*)', cmd)
+                if m:
+                    cmdType = m.group(1)
+                    cmdCategory = m.group(2)
+                    if cmdType == 's' and cmdCategory:   # no completions for set(a|v|abb)
+                        words = []
+                    elif cmdCategory == 'a':             # alias command
+                        words = list(ms.aliases)
+                        if cmdType == 'g':
+                            words.append('*')
+                    elif cmdCategory == 'v':             # variable command
+                        words = list(ms.variables)
+                        if cmdType == 'g':
+                            words.append('*')
+                    elif cmdCategory == 'abb':           # abbreviation command
+                        words = list(ms.completion['Abbreviations'])
+                        if cmdType == 'g':
+                            words.append('*')
+                    elif not cmdCategory:                # program setting command
+                        # Instead of running an overall sort, we construct a specially-ordered word list
+                        doOverallSort = False
+                        defType = ms.connection['definitionType']
+                        words = sorted(list(ms.settings)) + ['definitionType']
+                        words.extend(ms.connection[defType])
+                        if cmdType == 'g':
+                            words.insert(0, '*')
                 elif cmd in ['source', 'save']:
                     completions = list(PathCompleter().get_completions(
                                 Document(word_before_cursor, len(word_before_cursor)), CompleteEvent()))
@@ -106,6 +121,9 @@ class CommandCompleter(Completer):
             words = [c[0] for c in commandList] + list(ms.aliases)
         if self.ignore_case:
             word_before_cursor = word_before_cursor.lower()
+
+        if doOverallSort:
+            words.sort()
 
         def word_matches(word):
             """ True when the word before the cursor matches. """
