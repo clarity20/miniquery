@@ -41,14 +41,17 @@ commandList = [
     ['format',  '',               'Select a format for query output'],
     ['set',     '<name>=<value>', 'Set a MINIQUERY program setting'],
     ['seta',    '<alias>=<cmd>',  'Set up an alias for a command',      'Alias'],
+    ['setabb',  '<abbr>=<full>',  'Set up an abbreviation for db object naming', 'Abbreviate'],
     ['setv',    '<name>=<value>', 'Set a variable',                     'SetVariable'],
     ['get',     '<setting>',      'Inspect a MINIQUERY program setting'],
     ['geta',    '<alias name>',   'Inspect an alias',                   'GetAlias'],
-    ['getv',    '<variable>',     'Inspect a variable'                  'GetVariable'],
-    ['save',    '',               'Save MINIQUERY settings, aliases and variables'],
+    ['getabb',  '<abbreviation>', 'Inspect an abbreviation',            'GetAbbreviation'],
+    ['getv',    '<variable>',     'Inspect a variable',                 'GetVariable'],
+    ['save',    '<file>',         'Save MINIQUERY settings, aliases and variables'],
     ['source',  '<file>',         'Read and execute commands from a file'],
     ['unset',   '<name>',         'Unset a MINIQUERY setting'],
     ['unseta',  '<name>',         'Unset an alias',                     'Unalias'],
+    ['unsetabb','<abbreviation>', 'Unset an abbreviation',              'Unabbreviate'],
     ['unsetv',  '<variable>',     'Unset a variable'                    'UnsetVariable'],
 #    ['cp']     : doCompleter,
 ]
@@ -68,5 +71,5 @@ settingOptionsMap = {
     'editMode' : (['VI', 'EMACS'],
         'Command editing mode',
         'Choose vi- or emacs-style command editing:'),
-    }
+}
 

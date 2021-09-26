@@ -479,6 +479,24 @@ class MiniqueryApp():
 
         return ReturnCode.SUCCESS
 
+    def doGetAbbreviation(self, argv):
+        argc = len(argv)
+        if argc < 1:
+            print('USAGE: getabb <abbreviation>')
+            print('Displays the text to which an abbreviation expands.')
+            print('Use "getabb *" to see all abbreviations.')
+        else:
+            abbName = argv[0]
+            if abbName == '*':
+                for a in ms.completion['Abbreviations'].items():
+                    print(a[0] + ': ' + a[1])
+            elif abbName in ms.completion['Abbreviations']:
+                print(abbName + ': ' + ms.completion['Abbreviations'][abbName])
+            else:
+                print('Error: Abbreviation ' + abbName + ' not found.')
+
+        return ReturnCode.SUCCESS
+
     def doAlias(self, argv):
         self._setArbitraryValue("seta", argv, 'alias', 'command', 'Aliases', 'a native command')
         return ReturnCode.SUCCESS
@@ -493,6 +511,14 @@ class MiniqueryApp():
 
     def doUnsetVariable(self, argv):
         self._unsetValueCommand("unsetv", argv, 'variable', 'Variables', keepKey=False)
+        return ReturnCode.SUCCESS
+
+    def doAbbreviate(self, argv):
+        self._setArbitraryValue("setabb", argv, 'abbrev', 'value', 'Completion', 'text to be substituted', 'Abbreviations')
+        return ReturnCode.SUCCESS
+
+    def doUnabbreviate(self, argv):
+        self._unsetValueCommand("unsetabb", argv, 'abbreviation', 'Completion', 'Abbreviations', keepKey=False)
         return ReturnCode.SUCCESS
 
 
