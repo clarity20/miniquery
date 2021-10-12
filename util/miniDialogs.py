@@ -618,11 +618,10 @@ class MiniButton(object):
             if self.handler is not None:
                 self.handler()
 
-        # ESC should only actuate buttons mapped to act like cancelers
+        # ESC should trigger the cancel-button behavior no matter which button has the focus
         @kb.add('escape')
         def _(event):
-            if self.handler == _return_none:
-                self.handler()
+            _return_none()
 
         @kb.add('tab')
         def _(event):
