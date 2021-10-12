@@ -83,7 +83,7 @@ class MiniqueryApp():
                     callback = getattr(self, callbackName, None)
                     result = callback(argv)
                 except KeyError:
-                    print('Unknown command "'+ self._args._commandName + '"')
+                    em.doWarn(msg='Unknown command "'+ self._args._commandName + '"')
                     return ReturnCode.SUCCESS
             else:
                 return ReturnCode.SUCCESS
@@ -92,8 +92,6 @@ class MiniqueryApp():
                 return result
             elif result == ReturnCode.DATABASE_CONNECTION_ERROR:
                 # Allow the user to fix the connection settings and keep going.
-                #TODO One situation is a failed cxn due to bad cxn strings.
-                #TODO Accept changes, & upon "reconnect" cmd, try to reconnect.
                 em.doWarn()
                 return ReturnCode.SUCCESS
             else:
