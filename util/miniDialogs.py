@@ -307,6 +307,7 @@ class MiniListBox(object):
 
         @kb.add(Keys.Any)
         def _(event):
+
             keyPressed = event.key_sequence[0].key
 
             # For path boxes, implement standard editing and navigation keys
@@ -404,12 +405,14 @@ class MiniListBox(object):
         @kb.add('home')
         def _(event):
             if self.type == LBOX_PATH:
+                self.cursor_position = 0
                 return
             self.selectedItem = 0
 
         @kb.add('end')
         def _(event):
             if self.type == LBOX_PATH:
+                self.cursor_position = len(self.itemList[0]) - 1
                 return
             self.selectedItem = self.itemCount-1
 
