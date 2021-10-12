@@ -223,7 +223,7 @@ class MiniqueryApp():
         choice = self._chooseValueFromList(optionsTuple[0], 'Settings', 'format',
                     optionsTuple[1], optionsTuple[2],
                     userEntry=argv[0] if argc >= 1 else None)
-        if choice >= 0:
+        if choice and choice >= 0:
             self._args._persistentOptions[optionsTuple[0][choice]] = True
         return ReturnCode.SUCCESS
 
@@ -756,7 +756,30 @@ def main():
     historyObject = MiniFileHistory(histFileName)
     miniApp.setHistory(historyObject)
 
-    session = PromptSession(history = historyObject)
+    session = PromptSession(history=historyObject)
+    from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindings
+    from prompt_toolkit.keys import Keys
+    from prompt_toolkit.filters import emacs_insert_mode, vi_insert_mode
+
+    insert_mode = vi_insert_mode | emacs_insert_mode
+    kb = KeyBindings()
+
+    @kb.add(Keys.Any, filter=insert_mode)
+    def _(event):
+        b = event.current_buffer
+        isCompleting = b.complete_state
+        keyPressed = event.key_sequence[0].key
+        keyLen = len(keyPressed)
+        # Normal behavior for "visible" keys: Add and show the new key. IOW, mimic self_insert()
+        if keyLen == 1:
+            b.insert_text(event.data * event.arg)
+        # Extra behavior: If already in completion mode, complete once again with the new key appended.
+        if isCompleting:
+            if keyLen == 1 and keyPressed != ' ':
+                b.start_completion(insert_common_part=True)
+
+    session.app.key_bindings = merge_key_bindings([session.app.key_bindings, kb])
+
     cmdBuffer = []
 
     # If a system command or a query was given on the command line, process it before starting the main loop
