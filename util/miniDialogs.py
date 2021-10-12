@@ -754,7 +754,7 @@ def yes_no_dialog(title='', text='', yes_text='Yes', no_text='No', style=None,
 
 
 def button_dialog(title='', text='', buttons=[], style=None,
-                  async_=False):
+                  async_=False, initialChoice=None):
     """
     Display a dialog with button choices (given as a list of tuples).
     Return the value associated with button.
@@ -762,13 +762,20 @@ def button_dialog(title='', text='', buttons=[], style=None,
     def button_handler(v, dummy=None):
         get_app().exit(result=v)
 
+    buttonObjects = [MiniButton(text=t, handler=functools.partial(button_handler, v)) for t, v in buttons]
     dialog = MiniDialog(
         title=title,
         body=Label(text=text, dont_extend_height=True),
-        buttons=[MiniButton(text=t, handler=functools.partial(button_handler, v)) for t, v in buttons],
+        buttons=buttonObjects,
         with_background=True)
 
-    return _run_dialog(dialog, style, async_=async_)
+    if initialChoice:
+        fil = filter(lambda btn: btn.text==initialChoice, buttonObjects)
+        btn = next(fil)
+
+        return _run_dialog(dialog, style, async_=async_, focused_element=btn.control)
+    else:
+        return _run_dialog(dialog, style, async_=async_)
 
 
 def input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
@@ -999,23 +1006,23 @@ def radiolist_dialog(title='', text='', ok_text='Ok', cancel_text='Cancel',
     return _run_dialog(dialog, style, async_=async_)
 
 
-def _run_dialog(dialog, style, async_=False):
+def _run_dialog(dialog, style, async_=False, focused_element=None):
     " Turn the `Dialog` into an `Application` and run it. "
-    application = _create_app(dialog, style)
+    application = _create_app(dialog, style, focused_element)
     if async_:
         return application.run_async()
     else:
         return application.run()
 
 
-def _create_app(dialog, style):
+def _create_app(dialog, style, focused_element=None):
     # Key bindings.
     bindings = KeyBindings()
     bindings.add('tab')(focus_next)
     bindings.add('s-tab')(focus_previous)
 
     return Application(
-        layout=Layout(dialog),
+        layout=Layout(dialog, focused_element=focused_element),
         key_bindings=merge_key_bindings([
             load_key_bindings(),
             bindings,

@@ -597,8 +597,13 @@ class MiniqueryApp():
             # Button list must be a list of pair-tuples: (name, return value)
             buttonList = list(zip( lst+['CANCEL'], list(range(len(lst)))+[-1] ) \
                     if canCancel else zip(lst, range(len(lst))))
-            choice = button_dialog(title=title, text=text, buttons=buttonList)
-            if choice >= 0:
+            if subcategory:
+                currentChoice = getattr(ms, category)[subcategory][setting]
+            else:
+                currentChoice = getattr(ms, category)[setting]
+            choice = button_dialog(title=title, text=text, buttons=buttonList,
+                    initialChoice=currentChoice)
+            if choice and choice >= 0:
                 if subcategory:
                     getattr(ms, category)[subcategory][setting] = buttonList[choice][0]
                 else:
