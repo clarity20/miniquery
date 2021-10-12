@@ -861,25 +861,25 @@ def MiniFileDialog(title='', filePath='./', ok_text='OK', cancel_text='Cancel',
                  completer=None, password=False, style=None, async_=False):
     """
     Display a file selection dialog with filename list box and absolute path
-    textline. Return the given text, or None when cancelled.
+    textline. Return the chosen pathname, or None when cancelled.
 
     This MiniFileDialog is based on the ListBoxDialog. The file box is a list
     box that shows the files in the current directory. We add a secondary widget
     called the "path box" that shows the absolute path to the currently-
     selected file. (We might want to add a globbing-pattern widget too.)
 
-    For some applications the path box needs to reject noexisting paths, others
-    not, and in most applications we want it to be highlighted when it has
+    For some applications the path box needs to reject nonexisting paths,
+    and in most applications we want it to be highlighted when it has
     the focus. The FormattedTextControl (FTC) is an ideal widget for these
-    needs. However, a control-type object does not work when creating dialogs
-    with this software toolkit; it requires container-type objects. Fortunately
-    there is a container that has an FTC-type control, namely the MiniListBox.
+    needs. However, this software toolkit requires container-type objects,
+    not controls, when creating dialogs. Fortunately
+    there is a container that has an FTC for its control, namely the MiniListBox.
 
     As a side effect of implementing both the file box and the path box as
     MiniListBoxes, we need to put their handler code side-by-side in the
     MiniListBox class, which already handles plain old list boxes. In that code
     we add some extra logic to figure out what kind of widget we are truly
-    handling. This is not object-oriented but we have to draw the line.
+    handling. This is not object-oriented but we have to draw the line somewhere.
 
     """
 

@@ -55,10 +55,9 @@ class AppSettings():
         self.ostype = platform.system()
 
     '''
-    Define convenience getter methods for 'Settings' and 'ConnectionString'
-    subtrees of the settings object so we can say "ms.settings" instead of
-    "ms._settings['Settings']". (Due to the tree structure,
-    it doesn't make much sense to implement setter methods.)
+    Define convenience getter methods for the subtrees of the settings object
+    so we can refer to "ms.settings" instead of "ms._settings['Settings']".
+    (Due to the tree structure, it makes little sense to implement setter methods.)
     '''
 
     @property
