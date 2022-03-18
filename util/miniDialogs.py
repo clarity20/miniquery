@@ -14,6 +14,7 @@ from prompt_toolkit.keys import Keys
 
 import os
 import functools
+import platform
 from bisect import bisect_left
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
@@ -594,16 +595,17 @@ class MiniButton(object):
 
         if self.hotkeyIndex >= 0:
             # Button gets a hotkey by default
+            highlight = 'fg:red bg:yellow' if platform.system() == 'Windows' else 'underline'
             return [
                 ('class:button.arrow', '<', handler),
                 ('[SetCursorPosition]', ''),
                 ('class:button.text',text[: self.hotkeyIndex + offset], handler),
-                ('underline', text[self.hotkeyIndex + offset], handler),
+                (highlight, text[self.hotkeyIndex + offset], handler),
                 ('class:button.text', text[self.hotkeyIndex + offset + 1 :], handler),
                 ('class:button.arrow', '>', handler),
                     ]
         else:
-            # User declined a hotkey
+            # User did not specify a hotkey
             return [
                 ('class:button.arrow', '<', handler),
                 ('[SetCursorPosition]', ''),
