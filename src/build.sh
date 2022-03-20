@@ -1,36 +1,6 @@
 #!/usr/bin/env bash
 
-######## Helper functions ########
-
-function make_clean() {
-    # Move previous files to "old" directory
-    echo Backing up older generated files ...
-    mkdir -p "${BUILD_DIR}"
-    for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
-        mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback: 2>/dev/null
-    done
-}
-
-function generate_cython_config() {
-    echo Generating cython cfg file ${CYTHON_CFG_FILE} ...
-    for fn in "${SRC_DIR}"/*.py; do
-      bn=`basename "$fn"`
-      if [[ ! "$bn" =~ ^(setup|include)\.py$ ]]; then
-        echo include \""$bn"\" >> "${CYTHON_CFG_FILE}"
-      fi
-    done
-}
-
-function generate_c_file() {
-    echo Generating C file $GENERATED_CFILE ...
-    # Accomodate dependencies on util library
-    sed -i -e 's/miniGlobals /utilIncludes /' ${SRC_DIR}/argumentClassifier.py
-    sed -i -e 's/miniConfigObj /utilIncludes /' ${SRC_DIR}/appSettings.py
-    "$CYTHON" -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
-    sed -i -e 's/utilIncludes /miniConfigObj /' ${SRC_DIR}/appSettings.py
-    sed -i -e 's/utilIncludes /miniGlobals /' ${SRC_DIR}/argumentClassifier.py
-    ls -l "$GENERATED_CFILE"
-}
+source ../buildUtils.sh
 
 ######## Platform-agnostic definitions ########
 

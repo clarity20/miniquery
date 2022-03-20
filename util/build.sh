@@ -1,31 +1,6 @@
 #!/usr/bin/env bash
 
-######## Helper functions ########
-
-function make_clean() {
-    # Move previous files to "old" directory
-    echo Backing up older generated files ...
-    mkdir -p "${BUILD_DIR}"
-    for filename in "${CYTHON_CFG_FILE}"  "${GENERATED_CFILE}"  "${OBJECT_FILE}"  "${SHARED_LIBRARY}"; do
-        mv "$filename" "${BUILD_DIR}"/old    # To suppress feedback: 2>/dev/null
-    done
-}
-
-function generate_cython_config() {
-    echo Generating cython cfg file ${CYTHON_CFG_FILE} ...
-    for fn in "${SRC_DIR}"/*.py; do
-      bn=`basename "$fn"`
-      if [[ ! "$bn" =~ ^(setup|include)\.py$ ]]; then
-        echo include \""$bn"\" >> "${CYTHON_CFG_FILE}"
-      fi
-    done
-}
-
-function generate_c_file() {
-    echo Generating C file $GENERATED_CFILE ...
-    "$CYTHON" -3 "${CYTHON_CFG_FILE}" -o "${GENERATED_CFILE}"
-    ls -l "$GENERATED_CFILE"
-}
+source ../buildUtils.sh
 
 ######## Platform-agnostic definitions ########
 
@@ -138,7 +113,7 @@ case $OSTYPE in
     MSVC_LIBS="${MSVC}\\lib\\${TARGET_ARCH}"
     WINKIT_HOME="${PF}\\Windows Kits\\10"  # Windows Kits are downloaded from Microsoft
     WINKIT_MANIFEST="$(cygpath "${WINKIT_HOME}")"/SDKManifest.xml
-    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)"/\1/p' "$WINKIT_MANIFEST")
+    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)".*/\1/p' "$WINKIT_MANIFEST")
     WINKIT_INC="${WINKIT_HOME}\\Include\\${WINKIT_VERSION}"
     WINKIT_LIBS="${WINKIT_HOME}\\Lib\\${WINKIT_VERSION}"
     UCRTDIR="${WINKIT_LIBS}\\ucrt\\$TARGET_ARCH"

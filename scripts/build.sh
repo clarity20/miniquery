@@ -5,6 +5,8 @@
 function make_clean()
 {
     # Move previous files to "old" directory
+    echo Backing up older generated files ...
+    mkdir -p "${BUILD_DIR}"
     for filename in "${GENERATED_CFILE}" "${EXECUTABLE}" ; do
         mv "$filename" "${BUILD_DIR}"/old     # To suppress feedback: 2>/dev/null
     done

@@ -88,7 +88,7 @@ __all__ = (
     'ParseError',
     'DuplicateError',
     'ConfigspecError',
-    'ConfigObj',
+    'MiniConfigObj',
     'SimpleVal',
     'InterpolationError',
     'InterpolationLoopError',
@@ -136,64 +136,6 @@ def getObj(s):
 
 class UnknownType(Exception):
     pass
-
-
-class Builder(object):
-    
-    def build(self, o):
-        if m is None:
-            raise UnknownType(o.__class__.__name__)
-        return m(o)
-    
-    def build_List(self, o):
-        return list(map(self.build, o.getChildren()))
-    
-    def build_Const(self, o):
-        return o.value
-    
-    def build_Dict(self, o):
-        d = {}
-        i = iter(map(self.build, o.getChildren()))
-        for el in i:
-            d[el] = next(i)
-        return d
-    
-    def build_Tuple(self, o):
-        return tuple(self.build_List(o))
-    
-    def build_Name(self, o):
-        if o.name == 'None':
-            return None
-        if o.name == 'True':
-            return True
-        if o.name == 'False':
-            return False
-        
-        # An undefined Name
-        raise UnknownType('Undefined Name')
-    
-    def build_Add(self, o):
-        real, imag = list(map(self.build_Const, o.getChildren()))
-        try:
-            real = float(real)
-        except TypeError:
-            raise UnknownType('Add')
-        if not isinstance(imag, complex) or imag.real != 0.0:
-            raise UnknownType('Add')
-        return real+imag
-    
-    def build_Getattr(self, o):
-        parent = self.build(o.expr)
-        return getattr(parent, o.attrname)
-    
-    def build_UnarySub(self, o):
-        return -self.build_Const(o.getChildren()[0])
-    
-    def build_UnaryAdd(self, o):
-        return self.build_Const(o.getChildren()[0])
-
-
-_builder = Builder()
 
 
 def unrepr(s):
@@ -1288,7 +1230,7 @@ class MiniConfigObj(MiniSection):
         elif isinstance(infile, dict):
             # initialise self
             # the Section class handles creating subsections
-            if isinstance(infile, ConfigObj):
+            if isinstance(infile, MiniConfigObj):
                 # get a copy of our ConfigObj
                 def set_section(in_section, this_section):
                     for entry in in_section.scalars:

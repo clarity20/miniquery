@@ -223,6 +223,8 @@ class MiniqueryApp():
                     userEntry=argv[0] if argc >= 1 else None)
         if choice and choice >= 0:
             self._args._persistentOptions[optionsTuple[0][choice]] = True
+            em.setError(ReturnCode.Clarification)
+            em.doWarn("Results display format updated to " + optionsTuple[0][choice] + ".")
         return ReturnCode.SUCCESS
 
     def doSetDatabase(self, argv):
