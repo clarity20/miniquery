@@ -119,7 +119,7 @@ case $OSTYPE in
     MSVC_LIBS="${MSVC}\\lib\\${TARGET_ARCH}"
     WINKIT_HOME="${PF}\\Windows Kits\\10"  # Windows Kits are downloaded from Microsoft
     WINKIT_MANIFEST="$(cygpath "${WINKIT_HOME}")"/SDKManifest.xml
-    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)"/\1/p' "$WINKIT_MANIFEST")
+    WINKIT_VERSION=$(sed -rn '/Platform/ s/.*Version=([0-9.]+)".*/\1/p' "$WINKIT_MANIFEST")
     WINKIT_INC="${WINKIT_HOME}\\Include\\${WINKIT_VERSION}"
     WINKIT_LIBS="${WINKIT_HOME}\\Lib\\${WINKIT_VERSION}"
     UCRTDIR="${WINKIT_LIBS}\\ucrt\\$TARGET_ARCH"
